@@ -44,35 +44,57 @@ export default async function handler(req, res) {
       const seasons = await api("/seasons?program[]=1&active=true");
       const season = seasons.data[0];
       
-      const teams = await getAll(
-        "/teams?program[]=1&season[]=" + season.id +
+      // Get all past events in the state
+      const allEvents = await getAll(
+        "/events?program[]=1&season[]=" + season.id +
         "&region=" + encodeURIComponent(state)
       );
+      const now = new Date();
+      const pastEvents = allEvents.filter(e => new Date(e.end) < now);
       
-      const best = {};
+      // Fetch skills from all events and group by (team, event)
+      const teamEventScores = {};
+      const teamMap = {};
       
-      // Process each team
-      for (const t of teams) {
-        // Small delay to avoid 429 rate limiting
-        await new Promise(resolve => setTimeout(resolve, 120));
+      for (const event of pastEvents) {
+        const skills = await getAll("/events/" + event.id + "/skills");
         
-        const runs = await getAll("/teams/" + t.id + "/skills?season[]=" + season.id);
-        
-        // Group runs by event - auton + driver MUST be from same event
-        const byEvent = {};
-        for (const r of runs) {
-          const eid = r.event?.id;
-          if (!eid) continue;
-          if (!byEvent[eid]) byEvent[eid] = { auton: 0, driver: 0 };
-          if (r.type === "programming")
-            byEvent[eid].auton = Math.max(byEvent[eid].auton, r.score);
-          if (r.type === "driver")
-            byEvent[eid].driver = Math.max(byEvent[eid].driver, r.score);
+        for (const s of skills) {
+          const tid = String(s.team?.id);
+          if (!tid || tid === 'undefined') continue;
+          
+          // Store team metadata
+          if (!teamMap[tid]) {
+            teamMap[tid] = s.team?.name || 'Unknown';
+          }
+          
+          // Group by team and event
+          if (!teamEventScores[tid]) teamEventScores[tid] = {};
+          if (!teamEventScores[tid][event.id]) {
+            teamEventScores[tid][event.id] = { auton: 0, driver: 0 };
+          }
+          
+          if (s.type === "programming") {
+            teamEventScores[tid][event.id].auton = Math.max(
+              teamEventScores[tid][event.id].auton,
+              s.score
+            );
+          }
+          if (s.type === "driver") {
+            teamEventScores[tid][event.id].driver = Math.max(
+              teamEventScores[tid][event.id].driver,
+              s.score
+            );
+          }
         }
-        
-        // Find the event with the highest combined score
+      }
+      
+      // Find best combined score from any single event for each team
+      const best = {};
+      for (const [tid, events] of Object.entries(teamEventScores)) {
         let bestTotal = 0, bestAuton = 0, bestDriver = 0;
-        for (const ev of Object.values(byEvent)) {
+        
+        for (const ev of Object.values(events)) {
           const total = ev.auton + ev.driver;
           if (total > bestTotal) {
             bestTotal = total;
@@ -82,8 +104,8 @@ export default async function handler(req, res) {
         }
         
         if (bestTotal > 0) {
-          best[t.number] = {
-            team: t.number,
+          best[tid] = {
+            team: teamMap[tid],
             total: bestTotal,
             auton: bestAuton,
             driver: bestDriver
