@@ -111,6 +111,11 @@ export default async function handler(req, res) {
       cached: !!cached
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Full error:", e);
+    res.status(500).json({ 
+      error: e.message,
+      stack: e.stack,
+      name: e.name
+    });
   }
 }
