@@ -49,11 +49,13 @@ async function run() {
     
     const res = await fetch(`/api/state?team=${encodeURIComponent(team)}&state=${encodeURIComponent(state)}&rank=${rank}&token=${encodeURIComponent(token)}`);
     
+    const data = await res.json();
+    
     if (!res.ok) {
-      throw new Error(`API returned ${res.status}: ${res.statusText}`);
+      document.getElementById("output").textContent = "ERROR " + res.status + ":\n" + JSON.stringify(data, null, 2);
+      return;
     }
     
-    const data = await res.json();
     document.getElementById("output").textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     document.getElementById("output").textContent = "ERROR: " + err.message;
