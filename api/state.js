@@ -59,7 +59,31 @@ export default async function handler(req, res) {
       const best = {};
 
       for (const t of teams) {
-        const runs = await getAll("/teams/" + t.id + "/skills?season[]=" + season.id);
+
+  // Small delay to avoid 429 rate limiting
+  await new Promise(resolve => setTimeout(resolve, 120));
+
+  const runs = await getAll("/teams/" + t.id + "/skills?season[]=" + season.id);
+
+  let auton = 0;
+  let driver = 0;
+
+  for (const r of runs) {
+    if (r.type === "programming")
+      auton = Math.max(auton, r.score);
+    if (r.type === "driver")
+      driver = Math.max(driver, r.score);
+  }
+
+  if (auton + driver > 0) {
+    best[t.number] = {
+      team: t.number,
+      total: auton + driver,
+      auton,
+      driver
+    };
+  }
+}
 
         let auton = 0;
         let driver = 0;
