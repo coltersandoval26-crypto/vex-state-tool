@@ -1,3 +1,7 @@
+import { Redis } from "@upstash/redis";
+
+const redis = Redis.fromEnv();
+
 export default async function handler(req, res) {
   try {
     const { team, state, rank, token } = req.query;
@@ -6,71 +10,84 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing parameters" });
     }
 
-    const headers = {
-      Authorization: "Bearer " + token.trim(),
-      Accept: "application/json"
-    };
+    const cacheKey = `state:${state.toLowerCase()}`;
 
-    async function api(path) {
-      const r = await fetch("https://www.robotevents.com/api/v2" + path, { headers });
-      if (!r.ok) throw new Error("API " + r.status);
-      return r.json();
-    }
+    // 1️⃣ Check Redis cache
+    const cached = await redis.get(cacheKey);
 
-    async function getAll(path) {
-      let all = [];
-      let page = 1;
-      let last = 1;
+    let ranked;
 
-      do {
-        const sep = path.includes("?") ? "&" : "?";
-        const data = await api(path + sep + "page=" + page + "&per_page=250");
-        all = all.concat(data.data || []);
-        last = data.meta?.last_page || 1;
-        page++;
-      } while (page <= last);
+    if (cached) {
+      ranked = cached;
+    } else {
 
-      return all;
-    }
+      const headers = {
+        Authorization: "Bearer " + token.trim(),
+        Accept: "application/json"
+      };
 
-    // Get active season
-    const seasons = await api("/seasons?program[]=1&active=true");
-    const season = seasons.data[0];
-
-    // Get teams in state
-    const teams = await getAll(
-      "/teams?program[]=1&season[]=" + season.id +
-      "&region=" + encodeURIComponent(state)
-    );
-
-    const best = {};
-
-    for (const t of teams) {
-      const runs = await getAll("/teams/" + t.id + "/skills?season[]=" + season.id);
-
-      let auton = 0;
-      let driver = 0;
-
-      for (const r of runs) {
-        if (r.type === "programming")
-          auton = Math.max(auton, r.score);
-        if (r.type === "driver")
-          driver = Math.max(driver, r.score);
+      async function api(path) {
+        const r = await fetch("https://www.robotevents.com/api/v2" + path, { headers });
+        if (!r.ok) throw new Error("API " + r.status);
+        return r.json();
       }
 
-      if (auton + driver > 0) {
-        best[t.number] = {
-          team: t.number,
-          total: auton + driver,
-          auton,
-          driver
-        };
-      }
-    }
+      async function getAll(path) {
+        let all = [];
+        let page = 1;
+        let last = 1;
 
-    const ranked = Object.values(best)
-      .sort((a, b) => b.total - a.total)
-      .map((t, i) => ({ ...t, rank: i + 1 }));
+        do {
+          const sep = path.includes("?") ? "&" : "?";
+          const data = await api(path + sep + "page=" + page + "&per_page=250");
+          all = all.concat(data.data || []);
+          last = data.meta?.last_page || 1;
+          page++;
+        } while (page <= last);
+
+        return all;
+      }
+
+      const seasons = await api("/seasons?program[]=1&active=true");
+      const season = seasons.data[0];
+
+      const teams = await getAll(
+        "/teams?program[]=1&season[]=" + season.id +
+        "&region=" + encodeURIComponent(state)
+      );
+
+      const best = {};
+
+      for (const t of teams) {
+        const runs = await getAll("/teams/" + t.id + "/skills?season[]=" + season.id);
+
+        let auton = 0;
+        let driver = 0;
+
+        for (const r of runs) {
+          if (r.type === "programming")
+            auton = Math.max(auton, r.score);
+          if (r.type === "driver")
+            driver = Math.max(driver, r.score);
+        }
+
+        if (auton + driver > 0) {
+          best[t.number] = {
+            team: t.number,
+            total: auton + driver,
+            auton,
+            driver
+          };
+        }
+      }
+
+      ranked = Object.values(best)
+        .sort((a, b) => b.total - a.total)
+        .map((t, i) => ({ ...t, rank: i + 1 }));
+
+      // 2️⃣ Store for 24 hours (86400 seconds)
+      await redis.set(cacheKey, ranked, { ex: 86400 });
+    }
 
     const you = ranked.find(t => t.team === team);
     const target = ranked[parseInt(rank) - 1];
@@ -80,7 +97,8 @@ export default async function handler(req, res) {
       you,
       target,
       needed,
-      totalTeams: ranked.length
+      totalTeams: ranked.length,
+      cached: !!cached
     });
 
   } catch (e) {
