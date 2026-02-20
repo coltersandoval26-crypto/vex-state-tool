@@ -10,14 +10,11 @@
   --bg: #07090f;
   --surface: #0e1218;
   --card: #131820;
-  --card2: #181f2a;
   --border: #1e2a3a;
   --accent: #00d4ff;
-  --accent2: #0099cc;
   --gold: #f0b429;
   --green: #22c55e;
   --red: #ef4444;
-  --purple: #a855f7;
   --text: #e2e8f0;
   --muted: #64748b;
   --muted2: #94a3b8;
@@ -27,24 +24,18 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
   min-height: 100vh;
-  overflow-x: hidden;
 }
 
-/* ── Background ── */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(0,180,255,.07) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(168,85,247,.05) 0%, transparent 60%);
+  background: radial-gradient(ellipse 80% 50% at 10% 0%, rgba(0,180,255,.07) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
 }
@@ -52,9 +43,7 @@ body::after {
   content: '';
   position: fixed;
   inset: 0;
-  background-image:
-    linear-gradient(rgba(0,212,255,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,212,255,.025) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(0,212,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,.025) 1px, transparent 1px);
   background-size: 48px 48px;
   pointer-events: none;
   z-index: 0;
@@ -62,7 +51,6 @@ body::after {
 
 .wrap { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 48px 20px 80px; }
 
-/* ── Hero ── */
 .hero { text-align: center; margin-bottom: 52px; }
 .hero-eyebrow {
   font-family: var(--font-mono);
@@ -95,7 +83,6 @@ body::after {
   line-height: 1.7;
 }
 
-/* ── Card ── */
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -122,8 +109,7 @@ body::after {
   background: var(--border);
 }
 
-/* ── Form ── */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 @media(max-width:560px){ .form-grid { grid-template-columns: 1fr; } }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
@@ -147,10 +133,38 @@ body::after {
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
 .field input::placeholder { color: var(--muted); }
+.field select { cursor: pointer; }
 
-/* ── Button ── */
+/* Toggle */
+.toggle-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.toggle-btn {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+.toggle-btn.active {
+  background: linear-gradient(135deg, var(--accent), #0099cc);
+  border-color: var(--accent);
+  color: #000;
+}
+
 .btn {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  background: linear-gradient(135deg, var(--accent), #0099cc);
   border: none;
   border-radius: 8px;
   color: #000;
@@ -165,10 +179,32 @@ body::after {
   width: 100%;
 }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,212,255,.3); }
-.btn:active { transform: translateY(0); }
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
-/* ── Results ── */
+.status {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  margin-top: 16px;
+}
+.status.show { display: flex; }
+.status.loading { background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); color: var(--accent); }
+.status.error { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2); color: var(--red); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+
 .results { display: none; margin-top: 32px; }
 .results.show { display: block; }
 
@@ -214,7 +250,6 @@ body::after {
 .need-val { font-family: var(--font-head); font-size: 40px; font-weight: 900; color: var(--gold); line-height: 1; }
 .need-label { font-size: 10px; font-family: var(--font-mono); color: var(--gold); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
 
-/* ── Table ── */
 .table-wrap {
   background: var(--card);
   border: 1px solid var(--border);
@@ -277,30 +312,6 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
 }
 .tag-you    { background: rgba(0,212,255,.15); color: var(--accent); border: 1px solid rgba(0,212,255,.3); }
 .tag-target { background: rgba(240,180,41,.15); color: var(--gold); border: 1px solid rgba(240,180,41,.3); }
-
-.status {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: var(--font-mono);
-  margin-top: 16px;
-}
-.status.show { display: flex; }
-.status.loading { background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); color: var(--accent); }
-.status.error { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2); color: var(--red); }
-
-@keyframes spin { to { transform: rotate(360deg); } }
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .6s linear infinite;
-}
 </style>
 </head>
 <body>
@@ -329,10 +340,62 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
       </div>
     </div>
 
-    <div class="form-grid" style="margin-top:16px">
+    <div class="form-grid">
       <div class="field">
         <label>State / Region</label>
-        <input type="text" id="state" placeholder="Oklahoma">
+        <select id="state">
+          <option value="">Select your state...</option>
+          <option value="Alabama">Alabama</option>
+          <option value="Alaska">Alaska</option>
+          <option value="Arizona">Arizona</option>
+          <option value="Arkansas">Arkansas</option>
+          <option value="California">California</option>
+          <option value="Colorado">Colorado</option>
+          <option value="Connecticut">Connecticut</option>
+          <option value="Delaware">Delaware</option>
+          <option value="Florida">Florida</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Hawaii">Hawaii</option>
+          <option value="Idaho">Idaho</option>
+          <option value="Illinois">Illinois</option>
+          <option value="Indiana">Indiana</option>
+          <option value="Iowa">Iowa</option>
+          <option value="Kansas">Kansas</option>
+          <option value="Kentucky">Kentucky</option>
+          <option value="Louisiana">Louisiana</option>
+          <option value="Maine">Maine</option>
+          <option value="Maryland">Maryland</option>
+          <option value="Massachusetts">Massachusetts</option>
+          <option value="Michigan">Michigan</option>
+          <option value="Minnesota">Minnesota</option>
+          <option value="Mississippi">Mississippi</option>
+          <option value="Missouri">Missouri</option>
+          <option value="Montana">Montana</option>
+          <option value="Nebraska">Nebraska</option>
+          <option value="Nevada">Nevada</option>
+          <option value="New Hampshire">New Hampshire</option>
+          <option value="New Jersey">New Jersey</option>
+          <option value="New Mexico">New Mexico</option>
+          <option value="New York">New York</option>
+          <option value="North Carolina">North Carolina</option>
+          <option value="North Dakota">North Dakota</option>
+          <option value="Ohio">Ohio</option>
+          <option value="Oklahoma">Oklahoma</option>
+          <option value="Oregon">Oregon</option>
+          <option value="Pennsylvania">Pennsylvania</option>
+          <option value="Rhode Island">Rhode Island</option>
+          <option value="South Carolina">South Carolina</option>
+          <option value="South Dakota">South Dakota</option>
+          <option value="Tennessee">Tennessee</option>
+          <option value="Texas">Texas</option>
+          <option value="Utah">Utah</option>
+          <option value="Vermont">Vermont</option>
+          <option value="Virginia">Virginia</option>
+          <option value="Washington">Washington</option>
+          <option value="West Virginia">West Virginia</option>
+          <option value="Wisconsin">Wisconsin</option>
+          <option value="Wyoming">Wyoming</option>
+        </select>
       </div>
       <div class="field">
         <label>API Token</label>
@@ -340,7 +403,15 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
       </div>
     </div>
 
-    <button class="btn" id="calcBtn" onclick="calculate()" style="margin-top:20px">Calculate Target Score</button>
+    <div class="field" style="margin-bottom:16px">
+      <label>Grade Level</label>
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn active" onclick="setGrade('High School')">High School</button>
+        <button type="button" class="toggle-btn" onclick="setGrade('Middle School')">Middle School</button>
+      </div>
+    </div>
+
+    <button class="btn" id="calcBtn" onclick="calculate()">Calculate Target Score</button>
     
     <div class="status" id="status">
       <div class="spinner"></div>
@@ -372,6 +443,15 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
 </div>
 
 <script>
+let selectedGrade = 'High School';
+
+function setGrade(grade) {
+  selectedGrade = grade;
+  document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent === grade);
+  });
+}
+
 function setStatus(type, msg) {
   const bar = document.getElementById('status');
   bar.className = 'status show ' + type;
@@ -381,12 +461,12 @@ function setStatus(type, msg) {
 async function calculate() {
   const teamNum = document.getElementById('teamNum').value.trim().toUpperCase();
   const targetRank = parseInt(document.getElementById('targetRank').value);
-  const state = document.getElementById('state').value.trim();
+  const state = document.getElementById('state').value;
   const token = document.getElementById('apiToken').value.trim();
 
   if (!teamNum) { setStatus('error', 'Enter your team number'); return; }
   if (!targetRank) { setStatus('error', 'Enter target rank'); return; }
-  if (!state) { setStatus('error', 'Enter your state'); return; }
+  if (!state) { setStatus('error', 'Select your state'); return; }
   if (!token) { setStatus('error', 'Paste your API token'); return; }
 
   document.getElementById('calcBtn').disabled = true;
@@ -394,7 +474,8 @@ async function calculate() {
   document.getElementById('results').className = 'results';
 
   try {
-    const res = await fetch(`/api/state?team=${encodeURIComponent(teamNum)}&state=${encodeURIComponent(state)}&rank=${targetRank}&token=${encodeURIComponent(token)}`);
+    const url = `/api/state?team=${encodeURIComponent(teamNum)}&state=${encodeURIComponent(state)}&rank=${targetRank}&token=${encodeURIComponent(token)}&grade=${encodeURIComponent(selectedGrade)}`;
+    const res = await fetch(url);
     const data = await res.json();
 
     if (!res.ok) {
@@ -417,7 +498,7 @@ async function calculate() {
     bannerHTML += `<div class="need-box"><div class="need-val">${needed > 0 ? '+' + needed : '✓'}</div><div class="need-label">${needed > 0 ? 'Points Needed' : 'Already There!'}</div></div>`;
 
     document.getElementById('targetBanner').innerHTML = bannerHTML;
-    document.getElementById('resultsTitle').textContent = state + ' High School Skills';
+    document.getElementById('resultsTitle').textContent = state + ' ' + selectedGrade + ' Skills';
 
     // Build table
     const tableHTML = allTeams.map(t => {
