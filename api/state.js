@@ -130,6 +130,7 @@ export default async function handler(req, res) {
       target,
       needed,
       totalTeams: ranked.length,
+      allTeams: ranked,  // Add full list for table display
       cached: !!cached
     });
   } catch (e) {
