@@ -3,11 +3,12 @@ const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
   try {
-    const { team, state, rank, token } = req.query;
+    const { team, state, rank, token, grade } = req.query;
     if (!team || !state || !rank || !token) {
       return res.status(400).json({ error: "Missing parameters" });
     }
-    const cacheKey = `state:${state.toLowerCase()}`;
+    const gradeFilter = grade || 'High School'; // Default to HS
+    const cacheKey = `state:${state.toLowerCase()}:${gradeFilter.toLowerCase().replace(/\s+/g, '_')}`;
     
     // 1️⃣ Check Redis cache
     const cached = await redis.get(cacheKey);
@@ -55,6 +56,7 @@ export default async function handler(req, res) {
       // Fetch skills from all events and group by (team, event)
       const teamEventScores = {};
       const teamMap = {};
+      const teamGrades = {}; // Track team grades for filtering
       
       for (const event of pastEvents) {
         const skills = await getAll("/events/" + event.id + "/skills");
@@ -63,9 +65,11 @@ export default async function handler(req, res) {
           const tid = String(s.team?.id);
           if (!tid || tid === 'undefined') continue;
           
-          // Store team metadata
+          // Store team metadata including grade
           if (!teamMap[tid]) {
             teamMap[tid] = s.team?.name || 'Unknown';
+            // Extract grade from team object if available
+            teamGrades[tid] = s.team?.grade || '';
           }
           
           // Group by team and event
@@ -92,6 +96,13 @@ export default async function handler(req, res) {
       // Find best combined score from any single event for each team
       const best = {};
       for (const [tid, events] of Object.entries(teamEventScores)) {
+        // Filter by grade
+        const teamGrade = (teamGrades[tid] || '').toLowerCase();
+        const targetGrade = gradeFilter.toLowerCase();
+        const gradeMatches = teamGrade.includes(targetGrade.replace(' school', ''));
+        
+        if (!gradeMatches) continue; // Skip teams that don't match selected grade
+        
         let bestTotal = 0, bestAuton = 0, bestDriver = 0;
         
         for (const ev of Object.values(events)) {
