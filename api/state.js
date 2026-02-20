@@ -4,11 +4,13 @@ const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
   try {
-    const { team, state, rank, token } = req.query;
+    const { team, state, rank, token, grade } = req.query;
 
     if (!team || !state || !rank || !token) {
       return res.status(400).json({ error: "Missing parameters" });
     }
+    
+    const gradeFilter = grade || "High School"; // Use grade from request
 
     const headers = {
       Authorization: "Bearer " + token.trim(),
@@ -65,10 +67,10 @@ export default async function handler(req, res) {
       await redis.set("season:active", seasonId);
     }
 
-    const stateKey = `state:${seasonId}:${state.toLowerCase()}`;
+    const stateKey = `state:${seasonId}:${state.toLowerCase()}:${gradeFilter.toLowerCase().replace(/\s+/g, '_')}`;
     let eventIds = await redis.get(stateKey);
 
-    // 2️⃣ Get events for state (once per season)
+    // 2️⃣ Get events for state (once per season per grade)
     if (!eventIds) {
       const events = await getAll(
         "/events?program[]=1&season[]=" + seasonId +
@@ -88,7 +90,7 @@ export default async function handler(req, res) {
     // 3️⃣ Process events
     for (const eventId of eventIds) {
 
-      const eventKey = `event:${seasonId}:${eventId}`;
+      const eventKey = `event:${seasonId}:${eventId}:${gradeFilter.toLowerCase().replace(/\s+/g, '_')}`;
       let eventData = await redis.get(eventKey);
 
       if (!eventData) {
@@ -104,10 +106,10 @@ export default async function handler(req, res) {
 
         for (const s of skills) {
           const teamNumber = s.team?.name;
-          const grade = s.team?.grade;
+          const teamGrade = s.team?.grade;
 
-          // ✅ FILTER HERE (High School only)
-          if (!teamNumber || grade !== "High School") continue;
+          // ✅ FILTER by selected grade
+          if (!teamNumber || teamGrade !== gradeFilter) continue;
 
           if (!bestPerTeam[teamNumber]) {
             bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
