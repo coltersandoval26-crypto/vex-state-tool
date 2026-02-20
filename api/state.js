@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       let last = 1;
 
       do {
-        // Throttle to prevent 429
+        // throttle to reduce 429 risk
         await new Promise(r => setTimeout(r, 150));
 
         const sep = path.includes("?") ? "&" : "?";
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
     const stateKey = `state:${seasonId}:${state.toLowerCase()}`;
     let eventIds = await redis.get(stateKey);
 
-    // 2️⃣ If state not cached yet, fetch events
+    // 2️⃣ If state not indexed yet, fetch events once
     if (!eventIds) {
       const events = await getAll(
         "/events?program[]=1&season[]=" + seasonId +
@@ -90,14 +90,14 @@ export default async function handler(req, res) {
 
     const teamBest = {};
 
-    // 3️⃣ Process each event
+    // 3️⃣ Process each event (cached permanently)
     for (const eventId of eventIds) {
 
       const eventKey = `event:${seasonId}:${eventId}`;
       let eventData = await redis.get(eventKey);
 
       if (!eventData) {
-        // Throttle event requests
+        // throttle event calls
         await new Promise(r => setTimeout(r, 200));
 
         const skills = await getAll(`/events/${eventId}/skills`);
@@ -129,11 +129,11 @@ export default async function handler(req, res) {
 
         eventData = bestPerTeam;
 
-        // Store permanently for this season
+        // store permanently for this season
         await redis.set(eventKey, eventData);
       }
 
-      // Merge into state totals (best single event)
+      // merge best single-event score per team
       for (const [teamNum, scores] of Object.entries(eventData)) {
         const total = scores.auton + scores.driver;
 
@@ -161,6 +161,7 @@ export default async function handler(req, res) {
       target,
       needed,
       totalTeams: ranked.length,
+      allTeams: ranked,
       cached: true
     });
 
