@@ -23,10 +23,7 @@ export default async function handler(req, res) {
       }
 
       const data = await r.json();
-
-      if (!data) {
-        throw new Error("Empty API response");
-      }
+      if (!data) throw new Error("Empty API response");
 
       return data;
     }
@@ -37,7 +34,6 @@ export default async function handler(req, res) {
       let last = 1;
 
       do {
-        // throttle to reduce 429 risk
         await new Promise(r => setTimeout(r, 150));
 
         const sep = path.includes("?") ? "&" : "?";
@@ -55,13 +51,13 @@ export default async function handler(req, res) {
       return all;
     }
 
-    // 1️⃣ Get active season (cached)
+    // 1️⃣ Get active season
     let seasonId = await redis.get("season:active");
 
     if (!seasonId) {
       const seasons = await api("/seasons?program[]=1&active=true");
 
-      if (!seasons || !Array.isArray(seasons.data) || seasons.data.length === 0) {
+      if (!seasons?.data?.length) {
         throw new Error("Could not determine active season");
       }
 
@@ -72,7 +68,7 @@ export default async function handler(req, res) {
     const stateKey = `state:${seasonId}:${state.toLowerCase()}`;
     let eventIds = await redis.get(stateKey);
 
-    // 2️⃣ If state not indexed yet, fetch events once
+    // 2️⃣ Get events for state (once per season)
     if (!eventIds) {
       const events = await getAll(
         "/events?program[]=1&season[]=" + seasonId +
@@ -84,20 +80,18 @@ export default async function handler(req, res) {
       }
 
       eventIds = events.map(e => e.id);
-
       await redis.set(stateKey, eventIds);
     }
 
     const teamBest = {};
 
-    // 3️⃣ Process each event (cached permanently)
+    // 3️⃣ Process events
     for (const eventId of eventIds) {
 
       const eventKey = `event:${seasonId}:${eventId}`;
       let eventData = await redis.get(eventKey);
 
       if (!eventData) {
-        // throttle event calls
         await new Promise(r => setTimeout(r, 200));
 
         const skills = await getAll(`/events/${eventId}/skills`);
@@ -110,7 +104,10 @@ export default async function handler(req, res) {
 
         for (const s of skills) {
           const teamNumber = s.team?.name;
-          if (!teamNumber) continue;
+          const grade = s.team?.grade;
+
+          // ✅ FILTER HERE (High School only)
+          if (!teamNumber || grade !== "High School") continue;
 
           if (!bestPerTeam[teamNumber]) {
             bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
@@ -128,12 +125,9 @@ export default async function handler(req, res) {
         }
 
         eventData = bestPerTeam;
-
-        // store permanently for this season
         await redis.set(eventKey, eventData);
       }
 
-      // merge best single-event score per team
       for (const [teamNum, scores] of Object.entries(eventData)) {
         const total = scores.auton + scores.driver;
 
