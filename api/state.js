@@ -5,6 +5,7 @@ const redis = Redis.fromEnv();
 export default async function handler(req, res) {
   try {
     const { team, state, rank, token } = req.query;
+
     if (!team || !state || !rank || !token) {
       return res.status(400).json({ error: "Missing parameters" });
     }
@@ -16,8 +17,18 @@ export default async function handler(req, res) {
 
     async function api(path) {
       const r = await fetch("https://www.robotevents.com/api/v2" + path, { headers });
-      if (!r.ok) throw new Error("API " + r.status);
-      return r.json();
+
+      if (!r.ok) {
+        throw new Error("API " + r.status);
+      }
+
+      const data = await r.json();
+
+      if (!data) {
+        throw new Error("Empty API response");
+      }
+
+      return data;
     }
 
     async function getAll(path) {
@@ -26,10 +37,17 @@ export default async function handler(req, res) {
       let last = 1;
 
       do {
-        await new Promise(r => setTimeout(r, 120));
+        // Throttle to prevent 429
+        await new Promise(r => setTimeout(r, 150));
+
         const sep = path.includes("?") ? "&" : "?";
         const data = await api(path + sep + "page=" + page + "&per_page=250");
-        all = all.concat(data.data || []);
+
+        if (!data || !Array.isArray(data.data)) {
+          throw new Error("Malformed API response");
+        }
+
+        all = all.concat(data.data);
         last = data.meta?.last_page || 1;
         page++;
       } while (page <= last);
@@ -37,11 +55,16 @@ export default async function handler(req, res) {
       return all;
     }
 
-    // 1️⃣ Get active season
+    // 1️⃣ Get active season (cached)
     let seasonId = await redis.get("season:active");
 
     if (!seasonId) {
       const seasons = await api("/seasons?program[]=1&active=true");
+
+      if (!seasons || !Array.isArray(seasons.data) || seasons.data.length === 0) {
+        throw new Error("Could not determine active season");
+      }
+
       seasonId = seasons.data[0].id;
       await redis.set("season:active", seasonId);
     }
@@ -49,14 +72,19 @@ export default async function handler(req, res) {
     const stateKey = `state:${seasonId}:${state.toLowerCase()}`;
     let eventIds = await redis.get(stateKey);
 
-    // 2️⃣ If state not indexed yet
+    // 2️⃣ If state not cached yet, fetch events
     if (!eventIds) {
       const events = await getAll(
         "/events?program[]=1&season[]=" + seasonId +
         "&region=" + encodeURIComponent(state)
       );
 
+      if (!Array.isArray(events)) {
+        throw new Error("Events fetch failed");
+      }
+
       eventIds = events.map(e => e.id);
+
       await redis.set(stateKey, eventIds);
     }
 
@@ -69,33 +97,43 @@ export default async function handler(req, res) {
       let eventData = await redis.get(eventKey);
 
       if (!eventData) {
-        await new Promise(r => setTimeout(r, 150));
+        // Throttle event requests
+        await new Promise(r => setTimeout(r, 200));
 
         const skills = await getAll(`/events/${eventId}/skills`);
+
+        if (!Array.isArray(skills)) {
+          throw new Error("Skills fetch failed for event " + eventId);
+        }
+
         const bestPerTeam = {};
 
         for (const s of skills) {
-          const tid = String(s.team?.name);
-          if (!tid) continue;
+          const teamNumber = s.team?.name;
+          if (!teamNumber) continue;
 
-          if (!bestPerTeam[tid]) {
-            bestPerTeam[tid] = { auton: 0, driver: 0 };
+          if (!bestPerTeam[teamNumber]) {
+            bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
           }
 
           if (s.type === "programming") {
-            bestPerTeam[tid].auton = Math.max(bestPerTeam[tid].auton, s.score);
+            bestPerTeam[teamNumber].auton =
+              Math.max(bestPerTeam[teamNumber].auton, s.score);
           }
 
           if (s.type === "driver") {
-            bestPerTeam[tid].driver = Math.max(bestPerTeam[tid].driver, s.score);
+            bestPerTeam[teamNumber].driver =
+              Math.max(bestPerTeam[teamNumber].driver, s.score);
           }
         }
 
         eventData = bestPerTeam;
+
+        // Store permanently for this season
         await redis.set(eventKey, eventData);
       }
 
-      // Merge into state totals
+      // Merge into state totals (best single event)
       for (const [teamNum, scores] of Object.entries(eventData)) {
         const total = scores.auton + scores.driver;
 
@@ -127,6 +165,8 @@ export default async function handler(req, res) {
     });
 
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({
+      error: e.message
+    });
   }
 }
