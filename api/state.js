@@ -70,6 +70,7 @@ export default async function handler(req, res) {
 
     const eventIds = events.map(e => e.id);
     const teamBest = {};
+    let debugSample = null; // Sample team for debugging
 
     // Process events
     for (const eventId of eventIds) {
@@ -86,6 +87,11 @@ export default async function handler(req, res) {
       for (const s of skills) {
         const teamNumber = s.team?.name;
         const teamGrade = s.team?.grade;
+        
+        // Capture first team for debug
+        if (!debugSample) {
+          debugSample = { teamNumber, teamGrade, gradeFilter };
+        }
 
         // Filter by selected grade
         if (!teamNumber || teamGrade !== gradeFilter) continue;
@@ -134,7 +140,11 @@ export default async function handler(req, res) {
       totalTeams: ranked.length,
       allTeams: ranked,
       cached: false,
-      gradeFilter // Debug info
+      debug: {
+        gradeFilter,
+        totalEvents: eventIds.length,
+        sampleTeamGrade: debugSample
+      }
     });
 
   } catch (e) {
