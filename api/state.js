@@ -86,15 +86,14 @@ export default async function handler(req, res) {
 
       for (const s of skills) {
         const teamNumber = s.team?.name;
-        const teamGrade = s.team?.grade;
         
         // Capture first team for debug
         if (!debugSample) {
-          debugSample = { teamNumber, teamGrade, gradeFilter };
+          debugSample = { teamNumber, hasGrade: !!s.team?.grade, gradeFilter };
         }
 
-        // Filter by selected grade
-        if (!teamNumber || teamGrade !== gradeFilter) continue;
+        // Skip teams without numbers
+        if (!teamNumber) continue;
 
         if (!bestPerTeam[teamNumber]) {
           bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
