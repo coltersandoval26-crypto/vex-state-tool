@@ -45,6 +45,18 @@ export default async function handler(req, res) {
       const seasons = await api("/seasons?program[]=1&active=true");
       const season = seasons.data[0];
       
+      // Fetch teams list to get grade information
+      const allTeams = await getAll(
+        "/teams?program[]=1&season[]=" + season.id +
+        "&region=" + encodeURIComponent(state)
+      );
+      
+      // Build grade lookup from teams list
+      const teamGrades = {};
+      for (const t of allTeams) {
+        teamGrades[String(t.id)] = (t.grade || '').toLowerCase();
+      }
+      
       // Get all past events in the state
       const allEvents = await getAll(
         "/events?program[]=1&season[]=" + season.id +
@@ -56,7 +68,6 @@ export default async function handler(req, res) {
       // Fetch skills from all events and group by (team, event)
       const teamEventScores = {};
       const teamMap = {};
-      const teamGrades = {}; // Track team grades for filtering
       
       for (const event of pastEvents) {
         const skills = await getAll("/events/" + event.id + "/skills");
@@ -65,11 +76,9 @@ export default async function handler(req, res) {
           const tid = String(s.team?.id);
           if (!tid || tid === 'undefined') continue;
           
-          // Store team metadata including grade
+          // Store team number (don't overwrite grade - we got it from teams endpoint)
           if (!teamMap[tid]) {
             teamMap[tid] = s.team?.name || 'Unknown';
-            // Extract grade from team object if available
-            teamGrades[tid] = s.team?.grade || '';
           }
           
           // Group by team and event
