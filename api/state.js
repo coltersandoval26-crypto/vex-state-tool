@@ -6,7 +6,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing parameters" });
     }
     
-    const gradeFilter = grade || "High School"; // Use grade from request
+    const gradeFilter = grade || "High School";
 
     const headers = {
       Authorization: "Bearer " + token.trim(),
@@ -15,14 +15,9 @@ export default async function handler(req, res) {
 
     async function api(path) {
       const r = await fetch("https://www.robotevents.com/api/v2" + path, { headers });
-
-      if (!r.ok) {
-        throw new Error("API " + r.status);
-      }
-
+      if (!r.ok) throw new Error("API " + r.status);
       const data = await r.json();
       if (!data) throw new Error("Empty API response");
-
       return data;
     }
 
@@ -30,96 +25,76 @@ export default async function handler(req, res) {
       let all = [];
       let page = 1;
       let last = 1;
-
       do {
         await new Promise(r => setTimeout(r, 150));
-
         const sep = path.includes("?") ? "&" : "?";
         const data = await api(path + sep + "page=" + page + "&per_page=250");
-
-        if (!data || !Array.isArray(data.data)) {
-          throw new Error("Malformed API response");
-        }
-
+        if (!data || !Array.isArray(data.data)) throw new Error("Malformed API response");
         all = all.concat(data.data);
         last = data.meta?.last_page || 1;
         page++;
       } while (page <= last);
-
       return all;
     }
 
-    // Get active season
     const seasons = await api("/seasons?program[]=1&active=true");
-
-    if (!seasons?.data?.length) {
-      throw new Error("Could not determine active season");
-    }
-
+    if (!seasons?.data?.length) throw new Error("Could not determine active season");
     const seasonId = seasons.data[0].id;
 
-    // Get events for state
-    const events = await getAll(
-      "/events?program[]=1&season[]=" + seasonId +
-      "&region=" + encodeURIComponent(state)
-    );
-
-    if (!Array.isArray(events)) {
-      throw new Error("Events fetch failed");
-    }
-
+    const events = await getAll("/events?program[]=1&season[]=" + seasonId + "&region=" + encodeURIComponent(state));
+    if (!Array.isArray(events)) throw new Error("Events fetch failed");
     const eventIds = events.map(e => e.id);
+    
     const teamBest = {};
-    let debugSample = null; // Sample team for debugging
+    const debugSamples = [];
+    let totalSkills = 0;
+    let filteredOut = 0;
+    let keptTeams = 0;
 
     // Process events
     for (const eventId of eventIds) {
       await new Promise(r => setTimeout(r, 200));
-
       const skills = await getAll(`/events/${eventId}/skills`);
-
-      if (!Array.isArray(skills)) {
-        throw new Error("Skills fetch failed for event " + eventId);
-      }
-
+      if (!Array.isArray(skills)) throw new Error("Skills fetch failed for event " + eventId);
+      
+      totalSkills += skills.length;
       const bestPerTeam = {};
 
       for (const s of skills) {
         const teamNumber = s.team?.name;
+        const teamGrade = s.team?.grade;
         
-        // Capture first team for debug
-        if (!debugSample) {
-          debugSample = { teamNumber, hasGrade: !!s.team?.grade, gradeFilter };
+        // Capture samples for debugging
+        if (debugSamples.length < 10) {
+          debugSamples.push({ teamNumber, teamGrade, gradeFilter, eventId });
         }
 
-        // Skip teams without numbers
+        // Filter by selected grade
         if (!teamNumber) continue;
+        if (teamGrade !== gradeFilter) {
+          filteredOut++;
+          continue;
+        }
+        
+        keptTeams++;
 
         if (!bestPerTeam[teamNumber]) {
           bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
         }
 
         if (s.type === "programming") {
-          bestPerTeam[teamNumber].auton =
-            Math.max(bestPerTeam[teamNumber].auton, s.score);
+          bestPerTeam[teamNumber].auton = Math.max(bestPerTeam[teamNumber].auton, s.score);
         }
-
         if (s.type === "driver") {
-          bestPerTeam[teamNumber].driver =
-            Math.max(bestPerTeam[teamNumber].driver, s.score);
+          bestPerTeam[teamNumber].driver = Math.max(bestPerTeam[teamNumber].driver, s.score);
         }
       }
 
+      // Merge into teamBest
       for (const [teamNum, scores] of Object.entries(bestPerTeam)) {
         const total = scores.auton + scores.driver;
-
         if (!teamBest[teamNum] || total > teamBest[teamNum].total) {
-          teamBest[teamNum] = {
-            team: teamNum,
-            total,
-            auton: scores.auton,
-            driver: scores.driver
-          };
+          teamBest[teamNum] = { team: teamNum, total, auton: scores.auton, driver: scores.driver };
         }
       }
     }
@@ -138,17 +113,17 @@ export default async function handler(req, res) {
       needed,
       totalTeams: ranked.length,
       allTeams: ranked,
-      cached: false,
       debug: {
         gradeFilter,
         totalEvents: eventIds.length,
-        sampleTeamGrade: debugSample
+        totalSkillsProcessed: totalSkills,
+        filteredOut,
+        keptTeams,
+        debugSamples
       }
     });
 
   } catch (e) {
-    res.status(500).json({
-      error: e.message
-    });
+    res.status(500).json({ error: e.message });
   }
 }
