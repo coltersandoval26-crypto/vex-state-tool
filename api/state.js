@@ -1,7 +1,3 @@
-import { Redis } from "@upstash/redis";
-
-const redis = Redis.fromEnv();
-
 export default async function handler(req, res) {
   try {
     const { team, state, rank, token, grade } = req.query;
@@ -53,84 +49,63 @@ export default async function handler(req, res) {
       return all;
     }
 
-    // 1️⃣ Get active season
-    let seasonId = await redis.get("season:active");
+    // Get active season
+    const seasons = await api("/seasons?program[]=1&active=true");
 
-    if (!seasonId) {
-      const seasons = await api("/seasons?program[]=1&active=true");
-
-      if (!seasons?.data?.length) {
-        throw new Error("Could not determine active season");
-      }
-
-      seasonId = seasons.data[0].id;
-      await redis.set("season:active", seasonId);
+    if (!seasons?.data?.length) {
+      throw new Error("Could not determine active season");
     }
 
-    const stateKey = `state:${seasonId}:${state.toLowerCase()}:${gradeFilter.toLowerCase().replace(/\s+/g, '_')}`;
-    let eventIds = await redis.get(stateKey);
+    const seasonId = seasons.data[0].id;
 
-    // 2️⃣ Get events for state (once per season per grade)
-    if (!eventIds) {
-      const events = await getAll(
-        "/events?program[]=1&season[]=" + seasonId +
-        "&region=" + encodeURIComponent(state)
-      );
+    // Get events for state
+    const events = await getAll(
+      "/events?program[]=1&season[]=" + seasonId +
+      "&region=" + encodeURIComponent(state)
+    );
 
-      if (!Array.isArray(events)) {
-        throw new Error("Events fetch failed");
-      }
-
-      eventIds = events.map(e => e.id);
-      await redis.set(stateKey, eventIds);
+    if (!Array.isArray(events)) {
+      throw new Error("Events fetch failed");
     }
 
+    const eventIds = events.map(e => e.id);
     const teamBest = {};
 
-    // 3️⃣ Process events
+    // Process events
     for (const eventId of eventIds) {
+      await new Promise(r => setTimeout(r, 200));
 
-      const eventKey = `event:${seasonId}:${eventId}:${gradeFilter.toLowerCase().replace(/\s+/g, '_')}`;
-      let eventData = await redis.get(eventKey);
+      const skills = await getAll(`/events/${eventId}/skills`);
 
-      if (!eventData) {
-        await new Promise(r => setTimeout(r, 200));
-
-        const skills = await getAll(`/events/${eventId}/skills`);
-
-        if (!Array.isArray(skills)) {
-          throw new Error("Skills fetch failed for event " + eventId);
-        }
-
-        const bestPerTeam = {};
-
-        for (const s of skills) {
-          const teamNumber = s.team?.name;
-          const teamGrade = s.team?.grade;
-
-          // ✅ FILTER by selected grade
-          if (!teamNumber || teamGrade !== gradeFilter) continue;
-
-          if (!bestPerTeam[teamNumber]) {
-            bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
-          }
-
-          if (s.type === "programming") {
-            bestPerTeam[teamNumber].auton =
-              Math.max(bestPerTeam[teamNumber].auton, s.score);
-          }
-
-          if (s.type === "driver") {
-            bestPerTeam[teamNumber].driver =
-              Math.max(bestPerTeam[teamNumber].driver, s.score);
-          }
-        }
-
-        eventData = bestPerTeam;
-        await redis.set(eventKey, eventData);
+      if (!Array.isArray(skills)) {
+        throw new Error("Skills fetch failed for event " + eventId);
       }
 
-      for (const [teamNum, scores] of Object.entries(eventData)) {
+      const bestPerTeam = {};
+
+      for (const s of skills) {
+        const teamNumber = s.team?.name;
+        const teamGrade = s.team?.grade;
+
+        // Filter by selected grade
+        if (!teamNumber || teamGrade !== gradeFilter) continue;
+
+        if (!bestPerTeam[teamNumber]) {
+          bestPerTeam[teamNumber] = { auton: 0, driver: 0 };
+        }
+
+        if (s.type === "programming") {
+          bestPerTeam[teamNumber].auton =
+            Math.max(bestPerTeam[teamNumber].auton, s.score);
+        }
+
+        if (s.type === "driver") {
+          bestPerTeam[teamNumber].driver =
+            Math.max(bestPerTeam[teamNumber].driver, s.score);
+        }
+      }
+
+      for (const [teamNum, scores] of Object.entries(bestPerTeam)) {
         const total = scores.auton + scores.driver;
 
         if (!teamBest[teamNum] || total > teamBest[teamNum].total) {
@@ -158,7 +133,8 @@ export default async function handler(req, res) {
       needed,
       totalTeams: ranked.length,
       allTeams: ranked,
-      cached: true
+      cached: false,
+      gradeFilter // Debug info
     });
 
   } catch (e) {
