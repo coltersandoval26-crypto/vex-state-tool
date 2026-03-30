@@ -353,7 +353,7 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
 
     <div class="form-grid">
       <div class="field">
-        <label>API Token</label>
+        <label>API Token (optional if server has ROBOTEVENTS_TOKEN)</label>
         <input type="password" id="apiToken" placeholder="Your RobotEvents token">
       </div>
     </div>
@@ -400,6 +400,15 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
 <script>
 let selectedGrade = 'High School';
 
+
+(function initSavedToken() {
+  const saved = localStorage.getItem('re_token');
+  if (saved) {
+    const el = document.getElementById('apiToken');
+    if (el) el.value = saved;
+  }
+})();
+
 function setGrade(grade) {
   selectedGrade = grade;
   document.querySelectorAll('.toggle-btn').forEach(btn => {
@@ -421,15 +430,26 @@ async function calculate() {
   const token = document.getElementById('apiToken').value.trim();
 
   if (!targetRank || targetRank < 1) { setStatus('error', 'Enter a valid target rank'); return; }
-  if (!token) { setStatus('error', 'Paste your API token'); return; }
+  if (token) localStorage.setItem('re_token', token);
 
   document.getElementById('calcBtn').disabled = true;
   setStatus('loading', 'Fetching leaderboard data...');
   document.getElementById('results').className = 'results';
 
   try {
-    const url = `/api/state?team=${encodeURIComponent(teamQuery)}&region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}&rank=${targetRank}&token=${encodeURIComponent(token)}&grade=${encodeURIComponent(selectedGrade)}`;
-    const res = await fetch(url);
+    const payload = {
+      team: teamQuery,
+      region,
+      country,
+      rank: targetRank,
+      grade: selectedGrade,
+      token,
+    };
+    const res = await fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
     const data = await res.json();
 
     if (!res.ok) {

@@ -47,7 +47,29 @@ const server = http.createServer(async (req, res) => {
 
   if (parsed.pathname === '/api/state') {
     try {
-      await stateHandler({ method: req.method, query: parsed.query || {} }, createApiResponse(res));
+      if (req.method === 'POST') {
+        let rawBody = '';
+        req.on('data', (chunk) => {
+          rawBody += chunk;
+        });
+        req.on('end', async () => {
+          let body = {};
+          try {
+            body = rawBody ? JSON.parse(rawBody) : {};
+          } catch (_) {
+            sendJson(res, 400, { error: 'Invalid JSON body' });
+            return;
+          }
+
+          try {
+            await stateHandler({ method: req.method, query: parsed.query || {}, body }, createApiResponse(res));
+          } catch (error) {
+            sendJson(res, 500, { error: error.message || 'Unhandled server error' });
+          }
+        });
+      } else {
+        await stateHandler({ method: req.method, query: parsed.query || {}, body: {} }, createApiResponse(res));
+      }
     } catch (error) {
       sendJson(res, 500, { error: error.message || 'Unhandled server error' });
     }

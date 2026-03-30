@@ -289,23 +289,25 @@ function buildPlan(you, target) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const token = String(req.query.token || '').trim();
+    const input = req.method === 'POST' ? (req.body || {}) : (req.query || {});
+
+    const token = String(input.token || process.env.ROBOTEVENTS_TOKEN || '').trim();
     if (!token) {
-      res.status(400).json({ error: 'Missing RobotEvents API token.' });
+      res.status(400).json({ error: 'Missing RobotEvents API token. Provide token in request or set ROBOTEVENTS_TOKEN env var.' });
       return;
     }
 
-    const grade = normalizeGrade(req.query.grade) || 'High School';
-    const region = titleCase(String(req.query.region || '').trim());
-    const country = titleCase(String(req.query.country || '').trim());
-    const teamQuery = String(req.query.team || '').trim().toUpperCase();
-    const targetRank = Math.max(1, parseInt(req.query.rank, 10) || 10);
+    const grade = normalizeGrade(input.grade) || 'High School';
+    const region = titleCase(String(input.region || '').trim());
+    const country = titleCase(String(input.country || '').trim());
+    const teamQuery = String(input.team || '').trim().toUpperCase();
+    const targetRank = Math.max(1, parseInt(input.rank, 10) || 10);
 
     const leaderboardKey = `board:${grade}:${country || 'ALL'}:${region || 'ALL'}`;
     const cachedLeaderboard = getFresh(leaderboardCache, leaderboardKey, LEADERBOARD_TTL_MS);
