@@ -115,8 +115,8 @@ async function findCurrentSeason(token) {
   return season;
 }
 
-async function fetchAllTeams({ token, grade, country }) {
-  const key = `teams:${grade || 'ALL'}:${country || 'ALL'}`;
+async function fetchAllTeams({ token, grade, country, region }) {
+  const key = `teams:${grade || 'ALL'}:${country || 'ALL'}:${region || 'ALL'}`;
   const cached = getFresh(teamListCache, key, TEAM_LIST_TTL_MS);
   if (cached) return cached;
 
@@ -143,7 +143,10 @@ async function fetchAllTeams({ token, grade, country }) {
       page += 1;
     }
 
-    return all;
+    if (!region) return all;
+
+    const regionLower = region.toLowerCase();
+    return all.filter((team) => String(team?.location?.region || '').toLowerCase() === regionLower);
   });
 
   setCache(teamListCache, key, teams);
@@ -321,15 +324,10 @@ module.exports = async function handler(req, res) {
       budget = { ...budget, servedFromLeaderboardCache: true };
     } else {
       season = await findCurrentSeason(token);
-      const teams = await fetchAllTeams({ token, grade, country });
+      const teams = await fetchAllTeams({ token, grade, country, region });
       const loaded = await fetchLeaderboardFromTeams({ token, teams, seasonId: season.id });
       leaderboard = loaded.leaderboard;
       budget = loaded.budget;
-
-      if (region) {
-        const regionLower = region.toLowerCase();
-        leaderboard = leaderboard.filter((t) => String(t.region || '').toLowerCase() === regionLower);
-      }
 
       leaderboard.sort(sortLikeRobotEvents);
       leaderboard = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
