@@ -13,6 +13,22 @@ const teamSkillCache = new Map();
 const leaderboardCache = new Map();
 const inFlight = new Map();
 
+
+function pruneExpired(cacheMap, ttlMs) {
+  const now = nowMs();
+  for (const [key, entry] of cacheMap.entries()) {
+    if (!entry || (now - entry.savedAt) > ttlMs) {
+      cacheMap.delete(key);
+    }
+  }
+}
+
+function pruneAllCaches() {
+  pruneExpired(teamListCache, TEAM_LIST_TTL_MS);
+  pruneExpired(teamSkillCache, TEAM_SKILL_TTL_MS);
+  pruneExpired(leaderboardCache, LEADERBOARD_TTL_MS);
+}
+
 function nowMs() {
   return Date.now();
 }
@@ -298,6 +314,8 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    pruneAllCaches();
+
     const input = req.method === 'POST' ? (req.body || {}) : (req.query || {});
 
     const token = String(input.token || process.env.ROBOTEVENTS_TOKEN || '').trim();
