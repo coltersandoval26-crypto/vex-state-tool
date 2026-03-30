@@ -1,6 +1,7 @@
 const BASE_URL = 'https://www.robotevents.com/api/v2';
-const DEFAULT_PER_PAGE = 250;
 const PROGRAM_V5RC = 1;
+const PAGE_SIZE = 250;
+const SKILLS_CONCURRENCY = 8;
 
 function normalizeGrade(grade) {
   if (!grade) return undefined;
@@ -11,20 +12,23 @@ function normalizeGrade(grade) {
 }
 
 function titleCase(value = '') {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\b\w/g, (m) => m.toUpperCase());
+  return value.trim().toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 async function robotEventsFetch(path, token, searchParams = {}) {
-  const qs = new URLSearchParams();
-  Object.entries(searchParams).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') return;
-    qs.set(key, String(value));
-  });
+  const params = new URLSearchParams();
+  for (const [key, val] of Object.entries(searchParams)) {
+    if (val === undefined || val === null || val === '') continue;
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        if (item !== undefined && item !== null && item !== '') params.append(key, String(item));
+      }
+      continue;
+    }
+    params.set(key, String(val));
+  }
 
-  const url = `${BASE_URL}${path}${qs.toString() ? `?${qs.toString()}` : ''}`;
+  const url = `${BASE_URL}${path}${params.toString() ? `?${params.toString()}` : ''}`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -32,16 +36,15 @@ async function robotEventsFetch(path, token, searchParams = {}) {
     },
   });
 
-  const json = await response.json().catch(() => ({}));
-
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const err = new Error(json?.message || `RobotEvents request failed (${response.status})`);
-    err.status = response.status;
-    err.payload = json;
-    throw err;
+    const error = new Error(body?.message || `RobotEvents request failed (${response.status})`);
+    error.status = response.status;
+    error.payload = body;
+    throw error;
   }
 
-  return json;
+  return body;
 }
 
 function parseDate(value) {
@@ -51,81 +54,123 @@ function parseDate(value) {
 }
 
 async function findCurrentSeason(token) {
-  const seasonResp = await robotEventsFetch('/seasons', token, {
-    'program[]': PROGRAM_V5RC,
-    per_page: 100,
-  });
-
-  const seasons = seasonResp?.data || [];
-  if (!seasons.length) throw new Error('No V5RC seasons were returned by RobotEvents API.');
+  const resp = await robotEventsFetch('/seasons', token, { 'program[]': PROGRAM_V5RC, per_page: 100 });
+  const seasons = resp?.data || [];
+  if (!seasons.length) throw new Error('No V5RC seasons returned by RobotEvents.');
 
   const now = new Date();
   const sorted = [...seasons].sort((a, b) => {
-    const aStart = parseDate(a.start ?? a.start_date)?.getTime() ?? 0;
-    const bStart = parseDate(b.start ?? b.start_date)?.getTime() ?? 0;
+    const aStart = parseDate(a.start)?.getTime() || 0;
+    const bStart = parseDate(b.start)?.getTime() || 0;
     return bStart - aStart;
   });
 
-  const active = sorted.find((s) => {
-    const start = parseDate(s.start ?? s.start_date);
-    const end = parseDate(s.end ?? s.end_date);
-    if (!start || !end) return false;
-    return start <= now && end >= now;
+  const active = sorted.find((season) => {
+    const start = parseDate(season.start);
+    const end = parseDate(season.end);
+    return start && end && start <= now && end >= now;
   });
 
   return active || sorted[0];
 }
 
-async function loadSkills({ token, seasonId, grade, region, country }) {
-  const rows = [];
+async function fetchAllTeams({ token, grade, country, teamQuery }) {
+  const all = [];
   let page = 1;
 
   while (true) {
-    const payload = {
-      'season[]': seasonId,
+    const resp = await robotEventsFetch('/teams', token, {
       'program[]': PROGRAM_V5RC,
-      per_page: DEFAULT_PER_PAGE,
+      'grade[]': grade,
+      'country[]': country,
+      'number[]': teamQuery && /^[0-9]/.test(teamQuery) ? teamQuery : undefined,
       page,
-    };
+      per_page: PAGE_SIZE,
+    });
 
-    if (grade) payload['grade_level[]'] = grade;
-    if (region) payload['region'] = region;
-    if (country) payload['country'] = country;
-
-    const resp = await robotEventsFetch('/skills', token, payload);
-    const data = resp?.data || [];
-    rows.push(...data);
+    const rows = resp?.data || [];
+    all.push(...rows);
 
     const meta = resp?.meta || {};
-    const currentPage = meta.current_page || page;
-    const lastPage = meta.last_page || currentPage;
-    if (currentPage >= lastPage || !data.length) break;
+    const current = meta.current_page || page;
+    const last = meta.last_page || current;
+    if (current >= last || rows.length === 0) break;
     page += 1;
   }
 
-  return rows;
+  return all;
 }
 
-function normalizeSkillRow(raw) {
-  const teamNumber =
-    raw?.team?.number ||
-    raw?.team?.name ||
-    raw?.team?.team_name ||
-    raw?.team_number ||
-    raw?.number ||
-    'UNKNOWN';
+function computeTeamSkillSummary(runs) {
+  let bestDriver = 0;
+  let bestAuton = 0;
 
-  const auton = Number(raw?.score_auton ?? raw?.auton ?? raw?.programming ?? 0);
-  const driver = Number(raw?.score_driver ?? raw?.driver ?? raw?.driver_control ?? 0);
-  const total = Number(raw?.score ?? raw?.total ?? auton + driver);
+  for (const run of runs) {
+    const score = Number(run?.score || 0);
+    if (run?.type === 'driver') bestDriver = Math.max(bestDriver, score);
+    if (run?.type === 'programming') bestAuton = Math.max(bestAuton, score);
+  }
 
   return {
-    team: String(teamNumber).toUpperCase(),
-    teamName: raw?.team?.team_name || raw?.team_name || '',
-    auton,
-    driver,
-    total,
+    driver: bestDriver,
+    auton: bestAuton,
+    total: bestDriver + bestAuton,
   };
+}
+
+async function fetchSkillsForTeam(token, teamId, seasonId) {
+  const runs = [];
+  let page = 1;
+
+  while (true) {
+    const resp = await robotEventsFetch(`/teams/${teamId}/skills`, token, {
+      'season[]': seasonId,
+      page,
+      per_page: PAGE_SIZE,
+    });
+
+    const data = resp?.data || [];
+    runs.push(...data);
+
+    const meta = resp?.meta || {};
+    const current = meta.current_page || page;
+    const last = meta.last_page || current;
+    if (current >= last || data.length === 0) break;
+    page += 1;
+  }
+
+  return runs;
+}
+
+async function fetchLeaderboardFromTeams({ token, teams, seasonId }) {
+  const leaderboard = [];
+
+  for (let i = 0; i < teams.length; i += SKILLS_CONCURRENCY) {
+    const chunk = teams.slice(i, i + SKILLS_CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (team) => {
+        const runs = await fetchSkillsForTeam(token, team.id, seasonId);
+        const summary = computeTeamSkillSummary(runs);
+        if (summary.total <= 0) return null;
+
+        return {
+          id: team.id,
+          team: team.number,
+          teamName: team.team_name || '',
+          region: team.location?.region || '',
+          country: team.location?.country || '',
+          grade: team.grade || '',
+          auton: summary.auton,
+          driver: summary.driver,
+          total: summary.total,
+        };
+      })
+    );
+
+    leaderboard.push(...results.filter(Boolean));
+  }
+
+  return leaderboard;
 }
 
 function sortLikeRobotEvents(a, b) {
@@ -137,52 +182,43 @@ function sortLikeRobotEvents(a, b) {
 
 function buildPlan(you, target) {
   if (!target) {
-    return {
-      summary: 'No target rank exists for current filters yet.',
-      needed: 0,
-      neededAutonForTie: 0,
-      recommended: [],
-    };
+    return { needed: 0, recommended: ['No team currently exists at that rank for this filter scope.'] };
   }
 
   const yourTotal = you?.total || 0;
   const yourAuton = you?.auton || 0;
+
   const needed = Math.max(0, target.total - yourTotal + 1);
-  const neededAutonForTie = Math.max(0, target.auton - yourAuton + 1);
+  const autonTieGap = Math.max(0, target.auton - yourAuton + 1);
 
   if (!you) {
     return {
-      summary: `Post at least ${target.total + 1} total points to move above current #${target.rank}.`,
       needed: target.total + 1,
-      neededAutonForTie: target.auton + 1,
       recommended: [
-        `Target total score: ${target.total + 1}+`,
-        `Tie-break safe autonomous target: ${target.auton + 1}+`,
+        `To pass rank #${target.rank}, post at least ${target.total + 1} total points.`,
+        `For tie safety, aim for ${target.auton + 1}+ autonomous points.`,
       ],
     };
   }
 
-  const recommendations = [];
-  if (needed <= 0) {
-    recommendations.push('You are already above this target rank.');
-  } else {
-    recommendations.push(`Increase your total (auton + driver) by at least ${needed} points.`);
-    recommendations.push(`If tied on total, beat autonomous by at least ${neededAutonForTie} points.`);
-
-    const driverOnly = you.driver + needed;
-    const autonOnly = you.auton + needed;
-    recommendations.push(`One-match goal examples: ${you.auton} auton + ${driverOnly} driver, or ${autonOnly} auton + ${you.driver} driver.`);
-
-    const splitAuton = Math.max(neededAutonForTie, Math.ceil(needed * 0.35));
-    const splitDriver = needed - splitAuton;
-    recommendations.push(`Balanced tie-safe improvement: +${splitAuton} auton and +${Math.max(0, splitDriver)} driver.`);
+  if (needed === 0) {
+    return {
+      needed: 0,
+      recommended: ['You are already at or above this target rank. Keep improving autonomous to stay ahead in tie-breaks.'],
+    };
   }
 
+  const splitAuton = Math.max(autonTieGap, Math.ceil(needed * 0.35));
+  const splitDriver = Math.max(0, needed - splitAuton);
+
   return {
-    summary: needed > 0 ? `You need ${needed} more points to pass rank #${target.rank}.` : 'You have already reached this target.',
     needed,
-    neededAutonForTie,
-    recommended: recommendations,
+    recommended: [
+      `You need +${needed} total points to pass rank #${target.rank}.`,
+      `Tie-break focus: improve autonomous by at least +${autonTieGap}.`,
+      `Balanced one-attempt target: +${splitAuton} auton and +${splitDriver} driver.`,
+      `Alternative: keep auton and gain all +${needed} in driver, but this is weaker on tie-breaks.`,
+    ],
   };
 }
 
@@ -199,54 +235,40 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const grade = normalizeGrade(req.query.grade);
+    const grade = normalizeGrade(req.query.grade) || 'High School';
     const region = titleCase(String(req.query.region || '').trim());
     const country = titleCase(String(req.query.country || '').trim());
     const teamQuery = String(req.query.team || '').trim().toUpperCase();
-    const targetRank = Math.max(1, Number.parseInt(req.query.rank, 10) || 10);
+    const targetRank = Math.max(1, parseInt(req.query.rank, 10) || 10);
 
     const season = await findCurrentSeason(token);
+    const teams = await fetchAllTeams({ token, grade, country, teamQuery });
 
-    const skillsRows = await loadSkills({
-      token,
-      seasonId: season.id,
-      grade,
-      region,
-      country,
-    });
+    let leaderboard = await fetchLeaderboardFromTeams({ token, teams, seasonId: season.id });
 
-    const normalized = skillsRows.map(normalizeSkillRow);
-
-    const aggregatedMap = new Map();
-    for (const row of normalized) {
-      const existing = aggregatedMap.get(row.team);
-      if (!existing || sortLikeRobotEvents(row, existing) < 0) {
-        aggregatedMap.set(row.team, row);
-      }
+    if (region) {
+      const regionLower = region.toLowerCase();
+      leaderboard = leaderboard.filter((t) => String(t.region || '').toLowerCase() === regionLower);
     }
 
-    let leaderboard = Array.from(aggregatedMap.values()).sort(sortLikeRobotEvents);
-
-    leaderboard = leaderboard.map((row, index) => ({ ...row, rank: index + 1 }));
+    leaderboard.sort(sortLikeRobotEvents);
+    leaderboard = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
 
     const you = teamQuery
-      ? leaderboard.find((row) => row.team === teamQuery)
-        || leaderboard.find((row) => row.team.includes(teamQuery))
-        || leaderboard.find((row) => row.teamName.toLowerCase() === teamQuery.toLowerCase())
-        || leaderboard.find((row) => row.teamName.toLowerCase().includes(teamQuery.toLowerCase()))
+      ? leaderboard.find((r) => r.team.toUpperCase() === teamQuery)
+        || leaderboard.find((r) => r.team.toUpperCase().includes(teamQuery))
+        || leaderboard.find((r) => r.teamName.toLowerCase() === teamQuery.toLowerCase())
+        || leaderboard.find((r) => r.teamName.toLowerCase().includes(teamQuery.toLowerCase()))
         || null
       : null;
 
-    const target = leaderboard.find((row) => row.rank === targetRank) || null;
+    const target = leaderboard.find((r) => r.rank === targetRank) || null;
     const plan = buildPlan(you, target);
 
     res.status(200).json({
-      season: {
-        id: season.id,
-        name: season.name,
-      },
+      season: { id: season.id, name: season.name },
       filters: {
-        grade: grade || null,
+        grade,
         region: region || null,
         country: country || null,
         team: teamQuery || null,
