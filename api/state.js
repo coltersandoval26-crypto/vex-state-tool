@@ -83,7 +83,6 @@ async function fetchAllTeams({ token, grade, country, teamQuery }) {
       'program[]': PROGRAM_V5RC,
       'grade[]': grade,
       'country[]': country,
-      'number[]': teamQuery && /^[0-9]/.test(teamQuery) ? teamQuery : undefined,
       page,
       per_page: PAGE_SIZE,
     });
