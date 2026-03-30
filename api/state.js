@@ -3,9 +3,9 @@ const PROGRAM_V5RC = 1;
 const PAGE_SIZE = 250;
 const SKILLS_CONCURRENCY = 8;
 
-const TEAM_LIST_TTL_MS = 30 * 60 * 1000;
-const TEAM_SKILL_TTL_MS = 60 * 60 * 1000;
-const LEADERBOARD_TTL_MS = 10 * 60 * 1000;
+const TEAM_LIST_TTL_MS = 30 * 1000;
+const TEAM_SKILL_TTL_MS = 30 * 1000;
+const LEADERBOARD_TTL_MS = 30 * 1000;
 const MAX_API_SKILL_CALLS_PER_REQUEST = 250;
 
 const teamListCache = new Map();
