@@ -399,13 +399,24 @@ tbody tr:hover { background: rgba(0,212,255,.03); }
 
 <script>
 let selectedGrade = 'High School';
+let serverTokenConfigured = false;
 
 
-(function initSavedToken() {
+(async function initSavedToken() {
   const saved = localStorage.getItem('re_token');
   if (saved) {
     const el = document.getElementById('apiToken');
     if (el) el.value = saved;
+  }
+
+  try {
+    const statusRes = await fetch('/api/status');
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      serverTokenConfigured = Boolean(statusData.tokenConfigured);
+    }
+  } catch (_) {
+    serverTokenConfigured = false;
   }
 })();
 
@@ -430,6 +441,7 @@ async function calculate() {
   const token = document.getElementById('apiToken').value.trim();
 
   if (!targetRank || targetRank < 1) { setStatus('error', 'Enter a valid target rank'); return; }
+  if (!token && !serverTokenConfigured) { setStatus('error', 'Add API token or set ROBOTEVENTS_TOKEN on server'); return; }
   if (token) localStorage.setItem('re_token', token);
 
   document.getElementById('calcBtn').disabled = true;

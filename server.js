@@ -45,6 +45,14 @@ function safeJoin(base, target) {
 const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
 
+
+  if (parsed.pathname === '/api/status') {
+    sendJson(res, 200, {
+      tokenConfigured: Boolean(process.env.ROBOTEVENTS_TOKEN),
+    });
+    return;
+  }
+
   if (parsed.pathname === '/api/state') {
     try {
       if (req.method === 'POST') {
