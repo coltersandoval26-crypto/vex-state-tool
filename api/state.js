@@ -3,6 +3,38 @@ const PROGRAM_V5RC = 1;
 const PAGE_SIZE = 250;
 const SKILLS_CONCURRENCY = 8;
 
+const TEAM_LIST_TTL_MS = 30 * 60 * 1000;
+const TEAM_SKILL_TTL_MS = 60 * 60 * 1000;
+const LEADERBOARD_TTL_MS = 10 * 60 * 1000;
+const MAX_API_SKILL_CALLS_PER_REQUEST = 250;
+
+const teamListCache = new Map();
+const teamSkillCache = new Map();
+const leaderboardCache = new Map();
+const inFlight = new Map();
+
+function nowMs() {
+  return Date.now();
+}
+
+function getFresh(cacheMap, key, ttlMs) {
+  const entry = cacheMap.get(key);
+  if (!entry) return null;
+  if (nowMs() - entry.savedAt > ttlMs) return null;
+  return entry.value;
+}
+
+function setCache(cacheMap, key, value) {
+  cacheMap.set(key, { value, savedAt: nowMs() });
+}
+
+function withInflight(key, fn) {
+  if (inFlight.has(key)) return inFlight.get(key);
+  const p = Promise.resolve().then(fn).finally(() => inFlight.delete(key));
+  inFlight.set(key, p);
+  return p;
+}
+
 function normalizeGrade(grade) {
   if (!grade) return undefined;
   const raw = String(grade).toLowerCase().trim();
@@ -54,50 +86,68 @@ function parseDate(value) {
 }
 
 async function findCurrentSeason(token) {
-  const resp = await robotEventsFetch('/seasons', token, { 'program[]': PROGRAM_V5RC, per_page: 100 });
-  const seasons = resp?.data || [];
-  if (!seasons.length) throw new Error('No V5RC seasons returned by RobotEvents.');
+  const cacheKey = 'season:current';
+  const cached = getFresh(leaderboardCache, cacheKey, LEADERBOARD_TTL_MS);
+  if (cached) return cached;
 
-  const now = new Date();
-  const sorted = [...seasons].sort((a, b) => {
-    const aStart = parseDate(a.start)?.getTime() || 0;
-    const bStart = parseDate(b.start)?.getTime() || 0;
-    return bStart - aStart;
-  });
+  const season = await withInflight(cacheKey, async () => {
+    const resp = await robotEventsFetch('/seasons', token, { 'program[]': PROGRAM_V5RC, per_page: 100 });
+    const seasons = resp?.data || [];
+    if (!seasons.length) throw new Error('No V5RC seasons returned by RobotEvents.');
 
-  const active = sorted.find((season) => {
-    const start = parseDate(season.start);
-    const end = parseDate(season.end);
-    return start && end && start <= now && end >= now;
-  });
-
-  return active || sorted[0];
-}
-
-async function fetchAllTeams({ token, grade, country, teamQuery }) {
-  const all = [];
-  let page = 1;
-
-  while (true) {
-    const resp = await robotEventsFetch('/teams', token, {
-      'program[]': PROGRAM_V5RC,
-      'grade[]': grade,
-      'country[]': country,
-      page,
-      per_page: PAGE_SIZE,
+    const now = new Date();
+    const sorted = [...seasons].sort((a, b) => {
+      const aStart = parseDate(a.start)?.getTime() || 0;
+      const bStart = parseDate(b.start)?.getTime() || 0;
+      return bStart - aStart;
     });
 
-    const rows = resp?.data || [];
-    all.push(...rows);
+    const active = sorted.find((s) => {
+      const start = parseDate(s.start);
+      const end = parseDate(s.end);
+      return start && end && start <= now && end >= now;
+    });
 
-    const meta = resp?.meta || {};
-    const current = meta.current_page || page;
-    const last = meta.last_page || current;
-    if (current >= last || rows.length === 0) break;
-    page += 1;
-  }
+    return active || sorted[0];
+  });
 
-  return all;
+  setCache(leaderboardCache, cacheKey, season);
+  return season;
+}
+
+async function fetchAllTeams({ token, grade, country }) {
+  const key = `teams:${grade || 'ALL'}:${country || 'ALL'}`;
+  const cached = getFresh(teamListCache, key, TEAM_LIST_TTL_MS);
+  if (cached) return cached;
+
+  const teams = await withInflight(key, async () => {
+    const all = [];
+    let page = 1;
+
+    while (true) {
+      const resp = await robotEventsFetch('/teams', token, {
+        'program[]': PROGRAM_V5RC,
+        'grade[]': grade,
+        'country[]': country,
+        page,
+        per_page: PAGE_SIZE,
+      });
+
+      const rows = resp?.data || [];
+      all.push(...rows);
+
+      const meta = resp?.meta || {};
+      const current = meta.current_page || page;
+      const last = meta.last_page || current;
+      if (current >= last || rows.length === 0) break;
+      page += 1;
+    }
+
+    return all;
+  });
+
+  setCache(teamListCache, key, teams);
+  return teams;
 }
 
 function computeTeamSkillSummary(runs) {
@@ -110,11 +160,7 @@ function computeTeamSkillSummary(runs) {
     if (run?.type === 'programming') bestAuton = Math.max(bestAuton, score);
   }
 
-  return {
-    driver: bestDriver,
-    auton: bestAuton,
-    total: bestDriver + bestAuton,
-  };
+  return { driver: bestDriver, auton: bestAuton, total: bestDriver + bestAuton };
 }
 
 async function fetchSkillsForTeam(token, teamId, seasonId) {
@@ -141,16 +187,39 @@ async function fetchSkillsForTeam(token, teamId, seasonId) {
   return runs;
 }
 
+async function getTeamSkillSummaryCached({ token, teamId, seasonId, budget }) {
+  const key = `skills:${seasonId}:${teamId}`;
+  const cached = getFresh(teamSkillCache, key, TEAM_SKILL_TTL_MS);
+  if (cached) {
+    budget.cacheHits += 1;
+    return cached;
+  }
+
+  if (budget.apiCalls >= MAX_API_SKILL_CALLS_PER_REQUEST) {
+    budget.limited = true;
+    return null;
+  }
+
+  const summary = await withInflight(key, async () => {
+    budget.apiCalls += 1;
+    const runs = await fetchSkillsForTeam(token, teamId, seasonId);
+    return computeTeamSkillSummary(runs);
+  });
+
+  setCache(teamSkillCache, key, summary);
+  return summary;
+}
+
 async function fetchLeaderboardFromTeams({ token, teams, seasonId }) {
   const leaderboard = [];
+  const budget = { apiCalls: 0, cacheHits: 0, limited: false };
 
   for (let i = 0; i < teams.length; i += SKILLS_CONCURRENCY) {
     const chunk = teams.slice(i, i + SKILLS_CONCURRENCY);
     const results = await Promise.all(
       chunk.map(async (team) => {
-        const runs = await fetchSkillsForTeam(token, team.id, seasonId);
-        const summary = computeTeamSkillSummary(runs);
-        if (summary.total <= 0) return null;
+        const summary = await getTeamSkillSummaryCached({ token, teamId: team.id, seasonId, budget });
+        if (!summary || summary.total <= 0) return null;
 
         return {
           id: team.id,
@@ -169,7 +238,7 @@ async function fetchLeaderboardFromTeams({ token, teams, seasonId }) {
     leaderboard.push(...results.filter(Boolean));
   }
 
-  return leaderboard;
+  return { leaderboard, budget };
 }
 
 function sortLikeRobotEvents(a, b) {
@@ -186,7 +255,6 @@ function buildPlan(you, target) {
 
   const yourTotal = you?.total || 0;
   const yourAuton = you?.auton || 0;
-
   const needed = Math.max(0, target.total - yourTotal + 1);
   const autonTieGap = Math.max(0, target.auton - yourAuton + 1);
 
@@ -209,7 +277,6 @@ function buildPlan(you, target) {
 
   const splitAuton = Math.max(autonTieGap, Math.ceil(needed * 0.35));
   const splitDriver = Math.max(0, needed - splitAuton);
-
   return {
     needed,
     recommended: [
@@ -240,18 +307,33 @@ module.exports = async function handler(req, res) {
     const teamQuery = String(req.query.team || '').trim().toUpperCase();
     const targetRank = Math.max(1, parseInt(req.query.rank, 10) || 10);
 
-    const season = await findCurrentSeason(token);
-    const teams = await fetchAllTeams({ token, grade, country, teamQuery });
+    const leaderboardKey = `board:${grade}:${country || 'ALL'}:${region || 'ALL'}`;
+    const cachedLeaderboard = getFresh(leaderboardCache, leaderboardKey, LEADERBOARD_TTL_MS);
 
-    let leaderboard = await fetchLeaderboardFromTeams({ token, teams, seasonId: season.id });
+    let leaderboard;
+    let budget = { apiCalls: 0, cacheHits: 0, limited: false };
+    let season;
 
-    if (region) {
-      const regionLower = region.toLowerCase();
-      leaderboard = leaderboard.filter((t) => String(t.region || '').toLowerCase() === regionLower);
+    if (cachedLeaderboard) {
+      ({ leaderboard, season, budget } = cachedLeaderboard);
+      budget = { ...budget, servedFromLeaderboardCache: true };
+    } else {
+      season = await findCurrentSeason(token);
+      const teams = await fetchAllTeams({ token, grade, country });
+      const loaded = await fetchLeaderboardFromTeams({ token, teams, seasonId: season.id });
+      leaderboard = loaded.leaderboard;
+      budget = loaded.budget;
+
+      if (region) {
+        const regionLower = region.toLowerCase();
+        leaderboard = leaderboard.filter((t) => String(t.region || '').toLowerCase() === regionLower);
+      }
+
+      leaderboard.sort(sortLikeRobotEvents);
+      leaderboard = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
+
+      setCache(leaderboardCache, leaderboardKey, { leaderboard, season, budget });
     }
-
-    leaderboard.sort(sortLikeRobotEvents);
-    leaderboard = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
 
     const you = teamQuery
       ? leaderboard.find((r) => r.team.toUpperCase() === teamQuery)
@@ -266,12 +348,7 @@ module.exports = async function handler(req, res) {
 
     res.status(200).json({
       season: { id: season.id, name: season.name },
-      filters: {
-        grade,
-        region: region || null,
-        country: country || null,
-        team: teamQuery || null,
-      },
+      filters: { grade, region: region || null, country: country || null, team: teamQuery || null },
       targetRank,
       you,
       target,
@@ -279,7 +356,16 @@ module.exports = async function handler(req, res) {
       plan,
       allTeams: leaderboard,
       totalTeams: leaderboard.length,
-      cached: false,
+      cacheInfo: {
+        teamCacheEntries: teamSkillCache.size,
+        teamsCacheEntries: teamListCache.size,
+        leaderboardCacheEntries: leaderboardCache.size,
+        apiSkillCallsThisRequest: budget.apiCalls || 0,
+        skillCacheHitsThisRequest: budget.cacheHits || 0,
+        limitedByApiBudget: Boolean(budget.limited),
+        servedFromLeaderboardCache: Boolean(budget.servedFromLeaderboardCache),
+      },
+      cached: Boolean(budget.servedFromLeaderboardCache),
     });
   } catch (error) {
     res.status(error.status || 500).json({

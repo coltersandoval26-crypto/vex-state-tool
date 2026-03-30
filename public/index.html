@@ -436,7 +436,7 @@ async function calculate() {
       throw new Error(data.error || 'API Error');
     }
 
-    const { you, target, needed, allTeams, totalTeams, cached, season, plan, filters } = data;
+    const { you, target, needed, allTeams, totalTeams, cached, season, plan, filters, cacheInfo } = data;
 
     // Build banner
     let bannerHTML = '';
@@ -488,7 +488,8 @@ async function calculate() {
 
     document.getElementById('tableBody').innerHTML = tableHTML;
 
-    setStatus('loading', `✓ Loaded ${totalTeams} teams${cached ? ' (cached)' : ''}`);
+    const cacheMsg = cacheInfo ? ` • API calls: ${cacheInfo.apiSkillCallsThisRequest}, cache hits: ${cacheInfo.skillCacheHitsThisRequest}` : '';
+    setStatus('loading', `✓ Loaded ${totalTeams} teams${cached ? ' (cached)' : ''}${cacheMsg}`);
     setTimeout(() => {
       document.getElementById('status').className = 'status';
     }, 3000);
