@@ -1,441 +1,197 @@
-const BASE_URL = 'https://www.robotevents.com/api/v2';
+// RobotEvents Skills Calculator API
+// Strategy: use the v1 /api/seasons/{id}/skills endpoint which returns a
+// pre-ranked leaderboard in ONE request — no token required, no pagination.
+// We only use v2 (with token) to resolve the current season ID, then cache it.
+
+const BASE_V2 = 'https://www.robotevents.com/api/v2';
+const BASE_V1 = 'https://www.robotevents.com/api/seasons';
 const PROGRAM_V5RC = 1;
-const PAGE_SIZE = 250;
-const SKILLS_CONCURRENCY = 8;
 
-const TEAM_LIST_TTL_MS = 30 * 1000;
-const TEAM_SKILL_TTL_MS = 30 * 1000;
-const LEADERBOARD_TTL_MS = 30 * 1000;
-const MAX_API_SKILL_CALLS_PER_REQUEST = 250;
+// In-memory cache (lives as long as the serverless function instance)
+const cache = new Map();
+const SEASON_TTL  = 60 * 60 * 1000;  // 1 hour
+const SKILLS_TTL  = 5  * 60 * 1000;  // 5 minutes
 
-const teamListCache = new Map();
-const teamSkillCache = new Map();
-const leaderboardCache = new Map();
-const inFlight = new Map();
-
-
-function pruneExpired(cacheMap, ttlMs) {
-  const now = nowMs();
-  for (const [key, entry] of cacheMap.entries()) {
-    if (!entry || (now - entry.savedAt) > ttlMs) {
-      cacheMap.delete(key);
-    }
-  }
-}
-
-function pruneAllCaches() {
-  pruneExpired(teamListCache, TEAM_LIST_TTL_MS);
-  pruneExpired(teamSkillCache, TEAM_SKILL_TTL_MS);
-  pruneExpired(leaderboardCache, LEADERBOARD_TTL_MS);
-}
-
-function nowMs() {
-  return Date.now();
-}
-
-function getFresh(cacheMap, key, ttlMs) {
-  const entry = cacheMap.get(key);
+function cacheGet(key) {
+  const entry = cache.get(key);
   if (!entry) return null;
-  if (nowMs() - entry.savedAt > ttlMs) return null;
+  if (Date.now() - entry.at > entry.ttl) { cache.delete(key); return null; }
   return entry.value;
 }
-
-function setCache(cacheMap, key, value) {
-  cacheMap.set(key, { value, savedAt: nowMs() });
+function cacheSet(key, value, ttl) {
+  cache.set(key, { value, at: Date.now(), ttl });
 }
 
-function withInflight(key, fn) {
-  if (inFlight.has(key)) return inFlight.get(key);
-  const p = Promise.resolve().then(fn).finally(() => inFlight.delete(key));
-  inFlight.set(key, p);
-  return p;
-}
-
-function normalizeGrade(grade) {
-  if (!grade) return undefined;
-  const raw = String(grade).toLowerCase().trim();
-  if (raw.includes('middle')) return 'Middle School';
-  if (raw.includes('high')) return 'High School';
-  return undefined;
-}
-
-function titleCase(value = '') {
-  return value.trim().toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function normalizeLocationValue(value = '') {
-  return String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function locationMatches(actual, wanted) {
-  if (!wanted) return true;
-  const a = normalizeLocationValue(actual);
-  const w = normalizeLocationValue(wanted);
-  if (!a || !w) return false;
-  return a.includes(w) || w.includes(a);
-}
-
-async function robotEventsFetch(path, token, searchParams = {}) {
-  const params = new URLSearchParams();
-  for (const [key, val] of Object.entries(searchParams)) {
-    if (val === undefined || val === null || val === '') continue;
-    if (Array.isArray(val)) {
-      for (const item of val) {
-        if (item !== undefined && item !== null && item !== '') params.append(key, String(item));
-      }
-      continue;
-    }
-    params.set(key, String(val));
-  }
-
-  const url = `${BASE_URL}${path}${params.toString() ? `?${params.toString()}` : ''}`;
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    },
-  });
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(body?.message || `RobotEvents request failed (${response.status})`);
-    error.status = response.status;
-    error.payload = body;
-    throw error;
-  }
-
-  return body;
-}
-
-function parseDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-async function findCurrentSeason(token) {
+// ── Season lookup via v2 (needs token) ────────────────────────────────────────
+async function getCurrentSeasonId(token) {
   const cacheKey = 'season:current';
-  const cached = getFresh(leaderboardCache, cacheKey, LEADERBOARD_TTL_MS);
+  const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const season = await withInflight(cacheKey, async () => {
-    const resp = await robotEventsFetch('/seasons', token, { 'program[]': PROGRAM_V5RC, per_page: 100 });
-    const seasons = resp?.data || [];
-    if (!seasons.length) throw new Error('No V5RC seasons returned by RobotEvents.');
+  const res = await fetch(`${BASE_V2}/seasons?program[]=${PROGRAM_V5RC}&per_page=10`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!res.ok) throw Object.assign(new Error(`Seasons fetch failed: ${res.status}`), { status: res.status });
 
-    const now = new Date();
-    const sorted = [...seasons].sort((a, b) => {
-      const aStart = parseDate(a.start)?.getTime() || 0;
-      const bStart = parseDate(b.start)?.getTime() || 0;
-      return bStart - aStart;
-    });
+  const body = await res.json();
+  const seasons = body?.data || [];
+  const now = new Date();
+  const active = seasons
+    .sort((a, b) => new Date(b.start) - new Date(a.start))
+    .find(s => new Date(s.start) <= now && new Date(s.end) >= now)
+    || seasons[0];
 
-    const active = sorted.find((s) => {
-      const start = parseDate(s.start);
-      const end = parseDate(s.end);
-      return start && end && start <= now && end >= now;
-    });
+  if (!active) throw new Error('No V5RC season found');
+  cacheSet(cacheKey, active.id, SEASON_TTL);
+  return active.id;
+}
 
-    return active || sorted[0];
+// ── Skills leaderboard via v1 (NO token needed) ───────────────────────────────
+// Returns array already ranked by RobotEvents
+async function fetchSkillsLeaderboard({ seasonId, grade, region, country }) {
+  const cacheKey = `skills:${seasonId}:${grade}:${region || ''}:${country || ''}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return { data: cached, fromCache: true };
+
+  const params = new URLSearchParams({ post_season: 1 });
+  if (grade)   params.set('grade_level', grade);
+  if (region)  params.set('region', region);
+  if (country) params.set('country_region', country);
+
+  const url = `${BASE_V1}/${seasonId}/skills?${params}`;
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json', 'User-Agent': 'vex-state-tool/2.0' },
   });
 
-  setCache(leaderboardCache, cacheKey, season);
-  return season;
-}
-
-async function fetchAllTeams({ token, grade, country, region }) {
-  const key = `teams:${grade || 'ALL'}:${country || 'ALL'}:${region || 'ALL'}`;
-  const cached = getFresh(teamListCache, key, TEAM_LIST_TTL_MS);
-  if (cached) return cached;
-
-  const teams = await withInflight(key, async () => {
-    async function fetchPages(countryFilter) {
-      const all = [];
-      let page = 1;
-
-      while (true) {
-        const resp = await robotEventsFetch('/teams', token, {
-          'program[]': PROGRAM_V5RC,
-          'grade[]': grade,
-          'country[]': countryFilter || undefined,
-          page,
-          per_page: PAGE_SIZE,
-        });
-
-        const rows = resp?.data || [];
-        all.push(...rows);
-
-        const meta = resp?.meta || {};
-        const current = meta.current_page || page;
-        const last = meta.last_page || current;
-        if (current >= last || rows.length === 0) break;
-        page += 1;
-      }
-
-      return all;
-    }
-
-    let all = await fetchPages(country);
-
-    // RobotEvents country filtering can be inconsistent; fallback to unfiltered + local match when needed.
-    if (country && all.length === 0) {
-      all = await fetchPages(undefined);
-    }
-
-    if (country) {
-      all = all.filter((team) => locationMatches(team?.location?.country || '', country));
-    }
-
-    if (region) {
-      all = all.filter((team) => locationMatches(team?.location?.region || '', region));
-    }
-
-    return all;
-  });
-
-  setCache(teamListCache, key, teams);
-  return teams;
-}
-
-function computeTeamSkillSummary(runs) {
-  let bestDriver = 0;
-  let bestAuton = 0;
-
-  for (const run of runs) {
-    const score = Number(run?.score || 0);
-    if (run?.type === 'driver') bestDriver = Math.max(bestDriver, score);
-    if (run?.type === 'programming') bestAuton = Math.max(bestAuton, score);
-  }
-
-  return { driver: bestDriver, auton: bestAuton, total: bestDriver + bestAuton };
-}
-
-async function fetchSkillsForTeam(token, teamId, seasonId) {
-  const runs = [];
-  let page = 1;
-
-  while (true) {
-    const resp = await robotEventsFetch(`/teams/${teamId}/skills`, token, {
-      'season[]': seasonId,
-      page,
-      per_page: PAGE_SIZE,
-    });
-
-    const data = resp?.data || [];
-    runs.push(...data);
-
-    const meta = resp?.meta || {};
-    const current = meta.current_page || page;
-    const last = meta.last_page || current;
-    if (current >= last || data.length === 0) break;
-    page += 1;
-  }
-
-  return runs;
-}
-
-async function getTeamSkillSummaryCached({ token, teamId, seasonId, budget }) {
-  const key = `skills:${seasonId}:${teamId}`;
-  const cached = getFresh(teamSkillCache, key, TEAM_SKILL_TTL_MS);
-  if (cached) {
-    budget.cacheHits += 1;
-    return cached;
-  }
-
-  if (budget.apiCalls >= MAX_API_SKILL_CALLS_PER_REQUEST) {
-    budget.limited = true;
-    return null;
-  }
-
-  const summary = await withInflight(key, async () => {
-    budget.apiCalls += 1;
-    const runs = await fetchSkillsForTeam(token, teamId, seasonId);
-    return computeTeamSkillSummary(runs);
-  });
-
-  setCache(teamSkillCache, key, summary);
-  return summary;
-}
-
-async function fetchLeaderboardFromTeams({ token, teams, seasonId }) {
-  const leaderboard = [];
-  const budget = { apiCalls: 0, cacheHits: 0, limited: false };
-
-  for (let i = 0; i < teams.length; i += SKILLS_CONCURRENCY) {
-    const chunk = teams.slice(i, i + SKILLS_CONCURRENCY);
-    const results = await Promise.all(
-      chunk.map(async (team) => {
-        const summary = await getTeamSkillSummaryCached({ token, teamId: team.id, seasonId, budget });
-        if (!summary || summary.total <= 0) return null;
-
-        return {
-          id: team.id,
-          team: team.number,
-          teamName: team.team_name || '',
-          region: team.location?.region || '',
-          country: team.location?.country || '',
-          grade: team.grade || '',
-          auton: summary.auton,
-          driver: summary.driver,
-          total: summary.total,
-        };
-      })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw Object.assign(
+      new Error(`Skills v1 fetch failed: ${res.status}${text ? ' — ' + text.slice(0, 200) : ''}`),
+      { status: res.status }
     );
-
-    leaderboard.push(...results.filter(Boolean));
   }
 
-  return { leaderboard, budget };
-}
+  const raw = await res.json();
+  // v1 returns an array directly, already sorted rank 1→N
+  const teams = (Array.isArray(raw) ? raw : raw?.data || []).map((row, i) => ({
+    rank:     row.rank    ?? (i + 1),
+    team:     row.team?.team_number ?? row.team?.number ?? String(row.team_id ?? ''),
+    teamName: row.team?.team_name   ?? '',
+    region:   row.team?.event_region ?? row.event_region ?? '',
+    country:  row.team?.country      ?? '',
+    auton:    row.scores?.programming ?? row.programming_score ?? 0,
+    driver:   row.scores?.driver      ?? row.driver_score      ?? 0,
+    total:    row.scores?.score       ?? row.score             ?? 0,
+  }));
 
-function sortLikeRobotEvents(a, b) {
-  if (b.total !== a.total) return b.total - a.total;
-  if (b.auton !== a.auton) return b.auton - a.auton;
-  if (b.driver !== a.driver) return b.driver - a.driver;
-  return a.team.localeCompare(b.team);
+  cacheSet(cacheKey, teams, SKILLS_TTL);
+  return { data: teams, fromCache: false };
 }
 
 function buildPlan(you, target) {
-  if (!target) {
-    return { needed: 0, recommended: ['No team currently exists at that rank for this filter scope.'] };
-  }
+  if (!target) return { needed: 0, recommended: ['No team at that rank in this filter scope.'] };
 
-  const yourTotal = you?.total || 0;
-  const yourAuton = you?.auton || 0;
-  const needed = Math.max(0, target.total - yourTotal + 1);
-  const autonTieGap = Math.max(0, target.auton - yourAuton + 1);
+  const needed = Math.max(0, target.total - (you?.total ?? 0) + 1);
+  const autonGap = Math.max(0, target.auton - (you?.auton ?? 0) + 1);
 
-  if (!you) {
-    return {
-      needed: target.total + 1,
-      recommended: [
-        `To pass rank #${target.rank}, post at least ${target.total + 1} total points.`,
-        `For tie safety, aim for ${target.auton + 1}+ autonomous points.`,
-      ],
-    };
-  }
+  if (!you) return {
+    needed: target.total + 1,
+    recommended: [
+      `To pass rank #${target.rank}, post at least ${target.total + 1} total points.`,
+      `Aim for ${target.auton + 1}+ auton for tie-break safety.`,
+    ],
+  };
 
-  if (needed === 0) {
-    return {
-      needed: 0,
-      recommended: ['You are already at or above this target rank. Keep improving autonomous to stay ahead in tie-breaks.'],
-    };
-  }
+  if (needed === 0) return {
+    needed: 0,
+    recommended: ['You are already at or above this target rank. Keep improving autonomous for tie-breaks.'],
+  };
 
-  const splitAuton = Math.max(autonTieGap, Math.ceil(needed * 0.35));
+  const splitAuton = Math.max(autonGap, Math.ceil(needed * 0.35));
   const splitDriver = Math.max(0, needed - splitAuton);
   return {
     needed,
     recommended: [
       `You need +${needed} total points to pass rank #${target.rank}.`,
-      `Tie-break focus: improve autonomous by at least +${autonTieGap}.`,
-      `Balanced one-attempt target: +${splitAuton} auton and +${splitDriver} driver.`,
-      `Alternative: keep auton and gain all +${needed} in driver, but this is weaker on tie-breaks.`,
+      `Tie-break: improve autonomous by at least +${autonGap}.`,
+      `Balanced target: +${splitAuton} auton and +${splitDriver} driver.`,
     ],
   };
 }
 
+function normalizeGrade(g) {
+  if (!g) return 'High School';
+  const s = String(g).toLowerCase();
+  if (s.includes('middle')) return 'Middle School';
+  if (s.includes('college') || s.includes('university')) return 'College';
+  return 'High School';
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
-  // CORS headers for browser requests
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // Handle /api/status route
-  if (req.url && req.url.startsWith('/api/status')) {
+  // /api/status
+  if (req.url?.includes('/status')) {
     res.status(200).json({ tokenConfigured: Boolean(process.env.ROBOTEVENTS_TOKEN) });
     return;
   }
 
   if (req.method !== 'GET' && req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    res.status(405).json({ error: 'Method not allowed' }); return;
   }
 
   try {
-    pruneAllCaches();
-
     const input = req.method === 'POST' ? (req.body || {}) : (req.query || {});
 
     const token = String(input.token || process.env.ROBOTEVENTS_TOKEN || '').trim();
     if (!token) {
-      res.status(400).json({ error: 'Missing RobotEvents API token. Provide token in request or set ROBOTEVENTS_TOKEN env var.' });
+      res.status(400).json({ error: 'Missing ROBOTEVENTS_TOKEN. Set it in Vercel env vars or pass token in request.' });
       return;
     }
 
-    const grade = normalizeGrade(input.grade) || 'High School';
-    const region = titleCase(String(input.region || '').trim());
-    const country = titleCase(String(input.country || '').trim());
-    const teamQuery = String(input.team || '').trim().toUpperCase();
+    const grade      = normalizeGrade(input.grade);
+    const region     = String(input.region  || '').trim() || null;
+    const country    = String(input.country || '').trim() || null;
+    const teamQuery  = String(input.team    || '').trim().toUpperCase() || null;
     const targetRank = Math.max(1, parseInt(input.rank, 10) || 10);
 
-    const leaderboardKey = `board:${grade}:${country || 'ALL'}:${region || 'ALL'}`;
-    const cachedLeaderboard = getFresh(leaderboardCache, leaderboardKey, LEADERBOARD_TTL_MS);
+    // 1. Get season ID (cached 1hr)
+    const seasonId = await getCurrentSeasonId(token);
 
-    let leaderboard;
-    let budget = { apiCalls: 0, cacheHits: 0, limited: false };
-    let season;
-    let sourceTeamCount = 0;
+    // 2. Fetch leaderboard (cached 5min) — single v1 request!
+    const { data: allTeams, fromCache } = await fetchSkillsLeaderboard({ seasonId, grade, region, country });
 
-    if (cachedLeaderboard) {
-      ({ leaderboard, season, budget, sourceTeamCount } = cachedLeaderboard);
-      budget = { ...budget, servedFromLeaderboardCache: true };
-    } else {
-      season = await findCurrentSeason(token);
-      const teams = await fetchAllTeams({ token, grade, country, region });
-      sourceTeamCount = teams.length;
-      const loaded = await fetchLeaderboardFromTeams({ token, teams, seasonId: season.id });
-      leaderboard = loaded.leaderboard;
-      budget = loaded.budget;
-
-      leaderboard.sort(sortLikeRobotEvents);
-      leaderboard = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
-
-      setCache(leaderboardCache, leaderboardKey, { leaderboard, season, budget, sourceTeamCount });
-    }
-
+    // 3. Find your team
     const you = teamQuery
-      ? leaderboard.find((r) => r.team.toUpperCase() === teamQuery)
-        || leaderboard.find((r) => r.team.toUpperCase().includes(teamQuery))
-        || leaderboard.find((r) => r.teamName.toLowerCase() === teamQuery.toLowerCase())
-        || leaderboard.find((r) => r.teamName.toLowerCase().includes(teamQuery.toLowerCase()))
+      ? allTeams.find(r => r.team === teamQuery)
+        || allTeams.find(r => r.team.includes(teamQuery))
+        || allTeams.find(r => r.teamName.toUpperCase().includes(teamQuery))
         || null
       : null;
 
-    const target = leaderboard.find((r) => r.rank === targetRank) || null;
+    const target = allTeams.find(r => r.rank === targetRank) || allTeams[targetRank - 1] || null;
     const plan = buildPlan(you, target);
 
     res.status(200).json({
-      season: { id: season.id, name: season.name },
-      filters: { grade, region: region || null, country: country || null, team: teamQuery || null },
+      season:      { id: seasonId },
+      filters:     { grade, region, country, team: teamQuery },
       targetRank,
       you,
       target,
-      needed: plan.needed,
       plan,
-      allTeams: leaderboard,
-      totalTeams: leaderboard.length,
-      cacheInfo: {
-        teamCacheEntries: teamSkillCache.size,
-        teamsCacheEntries: teamListCache.size,
-        leaderboardCacheEntries: leaderboardCache.size,
-        apiSkillCallsThisRequest: budget.apiCalls || 0,
-        skillCacheHitsThisRequest: budget.cacheHits || 0,
-        limitedByApiBudget: Boolean(budget.limited),
-        servedFromLeaderboardCache: Boolean(budget.servedFromLeaderboardCache),
-        sourceTeamCount,
-      },
-      cached: Boolean(budget.servedFromLeaderboardCache),
+      needed:      plan.needed,
+      allTeams,
+      totalTeams:  allTeams.length,
+      cached:      fromCache,
     });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      error: error.message || 'Unknown error',
-      details: error.payload || null,
-    });
+
+  } catch (err) {
+    console.error('state handler error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Unknown error' });
   }
 };
