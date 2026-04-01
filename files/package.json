@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@upstash/redis": "^1.30.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
