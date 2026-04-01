@@ -520,7 +520,7 @@ async function calculate() {
 
     document.getElementById('tableBody').innerHTML = tableHTML;
 
-    const cacheMsg = cacheInfo ? ` • API calls: ${cacheInfo.apiSkillCallsThisRequest}, cache hits: ${cacheInfo.skillCacheHitsThisRequest}` : '';
+    const cacheMsg = cacheInfo ? ` • source teams: ${cacheInfo.sourceTeamCount}, API calls: ${cacheInfo.apiSkillCallsThisRequest}, cache hits: ${cacheInfo.skillCacheHitsThisRequest}` : '';
     setStatus('loading', `✓ Loaded ${totalTeams} teams${cached ? ' (cached)' : ''}${cacheMsg}`);
     setTimeout(() => {
       document.getElementById('status').className = 'status';

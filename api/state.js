@@ -63,6 +63,18 @@ function titleCase(value = '') {
   return value.trim().toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
+function normalizeLocationValue(value = '') {
+  return String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function locationMatches(actual, wanted) {
+  if (!wanted) return true;
+  const a = normalizeLocationValue(actual);
+  const w = normalizeLocationValue(wanted);
+  if (!a || !w) return false;
+  return a.includes(w) || w.includes(a);
+}
+
 async function robotEventsFetch(path, token, searchParams = {}) {
   const params = new URLSearchParams();
   for (const [key, val] of Object.entries(searchParams)) {
@@ -137,32 +149,48 @@ async function fetchAllTeams({ token, grade, country, region }) {
   if (cached) return cached;
 
   const teams = await withInflight(key, async () => {
-    const all = [];
-    let page = 1;
+    async function fetchPages(countryFilter) {
+      const all = [];
+      let page = 1;
 
-    while (true) {
-      const resp = await robotEventsFetch('/teams', token, {
-        'program[]': PROGRAM_V5RC,
-        'grade[]': grade,
-        'country[]': country,
-        page,
-        per_page: PAGE_SIZE,
-      });
+      while (true) {
+        const resp = await robotEventsFetch('/teams', token, {
+          'program[]': PROGRAM_V5RC,
+          'grade[]': grade,
+          'country[]': countryFilter || undefined,
+          page,
+          per_page: PAGE_SIZE,
+        });
 
-      const rows = resp?.data || [];
-      all.push(...rows);
+        const rows = resp?.data || [];
+        all.push(...rows);
 
-      const meta = resp?.meta || {};
-      const current = meta.current_page || page;
-      const last = meta.last_page || current;
-      if (current >= last || rows.length === 0) break;
-      page += 1;
+        const meta = resp?.meta || {};
+        const current = meta.current_page || page;
+        const last = meta.last_page || current;
+        if (current >= last || rows.length === 0) break;
+        page += 1;
+      }
+
+      return all;
     }
 
-    if (!region) return all;
+    let all = await fetchPages(country);
 
-    const regionLower = region.toLowerCase();
-    return all.filter((team) => String(team?.location?.region || '').toLowerCase() === regionLower);
+    // RobotEvents country filtering can be inconsistent; fallback to unfiltered + local match when needed.
+    if (country && all.length === 0) {
+      all = await fetchPages(undefined);
+    }
+
+    if (country) {
+      all = all.filter((team) => locationMatches(team?.location?.country || '', country));
+    }
+
+    if (region) {
+      all = all.filter((team) => locationMatches(team?.location?.region || '', region));
+    }
+
+    return all;
   });
 
   setCache(teamListCache, key, teams);
@@ -336,13 +364,15 @@ module.exports = async function handler(req, res) {
     let leaderboard;
     let budget = { apiCalls: 0, cacheHits: 0, limited: false };
     let season;
+    let sourceTeamCount = 0;
 
     if (cachedLeaderboard) {
-      ({ leaderboard, season, budget } = cachedLeaderboard);
+      ({ leaderboard, season, budget, sourceTeamCount } = cachedLeaderboard);
       budget = { ...budget, servedFromLeaderboardCache: true };
     } else {
       season = await findCurrentSeason(token);
       const teams = await fetchAllTeams({ token, grade, country, region });
+      sourceTeamCount = teams.length;
       const loaded = await fetchLeaderboardFromTeams({ token, teams, seasonId: season.id });
       leaderboard = loaded.leaderboard;
       budget = loaded.budget;
@@ -350,7 +380,7 @@ module.exports = async function handler(req, res) {
       leaderboard.sort(sortLikeRobotEvents);
       leaderboard = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
 
-      setCache(leaderboardCache, leaderboardKey, { leaderboard, season, budget });
+      setCache(leaderboardCache, leaderboardKey, { leaderboard, season, budget, sourceTeamCount });
     }
 
     const you = teamQuery
@@ -382,6 +412,7 @@ module.exports = async function handler(req, res) {
         skillCacheHitsThisRequest: budget.cacheHits || 0,
         limitedByApiBudget: Boolean(budget.limited),
         servedFromLeaderboardCache: Boolean(budget.servedFromLeaderboardCache),
+        sourceTeamCount,
       },
       cached: Boolean(budget.servedFromLeaderboardCache),
     });
