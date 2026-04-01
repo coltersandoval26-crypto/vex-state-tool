@@ -1,12 +1,7 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/state.js", "use": "@vercel/node" },
-    { "src": "public/**",    "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/status", "dest": "/api/state.js" },
-    { "src": "/api/state",  "dest": "/api/state.js" },
-    { "src": "/(.*)",       "dest": "/public/$1"    }
+  "rewrites": [
+    { "source": "/api/status", "destination": "/api/state.js" },
+    { "source": "/api/state",  "destination": "/api/state.js" },
+    { "source": "/(.*)",       "destination": "/public/$1"    }
   ]
 }
