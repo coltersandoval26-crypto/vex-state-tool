@@ -3,546 +3,390 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VEX Skills Calculator — What do I need to rank up?</title>
+<title>VEX Skills Calculator — What score do I need?</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #07090f;
+  --bg:      #07090f;
   --surface: #0e1218;
-  --card: #131820;
-  --border: #1e2a3a;
-  --accent: #00d4ff;
-  --gold: #f0b429;
-  --green: #22c55e;
-  --red: #ef4444;
-  --text: #e2e8f0;
-  --muted: #64748b;
-  --muted2: #94a3b8;
-  --font-head: 'Barlow Condensed', sans-serif;
-  --font-body: 'Barlow', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --card:    #131820;
+  --border:  #1e2a3a;
+  --accent:  #00d4ff;
+  --gold:    #f0b429;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --text:    #e2e8f0;
+  --muted:   #64748b;
+  --muted2:  #94a3b8;
+  --fh: 'Barlow Condensed', sans-serif;
+  --fb: 'Barlow', sans-serif;
+  --fm: 'JetBrains Mono', monospace;
 }
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  min-height: 100vh;
-}
-
+body { background: var(--bg); color: var(--text); font-family: var(--fb); min-height: 100vh; }
 body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse 80% 50% at 10% 0%, rgba(0,180,255,.07) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: 0;
 }
 body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: linear-gradient(rgba(0,212,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,.025) 1px, transparent 1px);
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
   background-size: 48px 48px;
-  pointer-events: none;
-  z-index: 0;
 }
+.wrap { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 48px 20px 80px; }
 
-.wrap { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 48px 20px 80px; }
-
-.hero { text-align: center; margin-bottom: 52px; }
-.hero-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--accent);
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-  display: inline-block;
-  background: rgba(0,212,255,.07);
-  border: 1px solid rgba(0,212,255,.2);
-  border-radius: 20px;
-  padding: 4px 14px;
+/* Hero */
+.hero { text-align: center; margin-bottom: 48px; }
+.eyebrow {
+  font-family: var(--fm); font-size: 11px; color: var(--accent); letter-spacing: 3px;
+  text-transform: uppercase; margin-bottom: 16px; display: inline-block;
+  background: rgba(0,212,255,.07); border: 1px solid rgba(0,212,255,.2);
+  border-radius: 20px; padding: 4px 14px;
 }
 .hero h1 {
-  font-family: var(--font-head);
-  font-size: clamp(48px, 9vw, 88px);
-  font-weight: 900;
-  line-height: .95;
-  letter-spacing: -1px;
-  margin-bottom: 18px;
+  font-family: var(--fh); font-size: clamp(44px,9vw,84px); font-weight: 900;
+  line-height: .95; letter-spacing: -1px; margin-bottom: 16px;
 }
-.hero h1 .line1 { color: var(--text); display: block; }
-.hero h1 .line2 { color: var(--accent); display: block; }
-.hero p {
-  font-size: 16px;
-  color: var(--muted2);
-  max-width: 520px;
-  margin: 0 auto;
-  line-height: 1.7;
-}
+.hero h1 .l1 { color: var(--text); display: block; }
+.hero h1 .l2 { color: var(--accent); display: block; }
+.hero p { font-size: 15px; color: var(--muted2); max-width: 480px; margin: 0 auto; line-height: 1.7; }
 
+/* Card */
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 28px;
-  margin-bottom: 20px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px; margin-bottom: 20px;
 }
 .card-title {
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-family: var(--fh); font-size: 12px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--accent);
+  margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
 }
-.card-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
+.card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-@media(max-width:560px){ .form-grid { grid-template-columns: 1fr; } }
-
+/* Form */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+@media(max-width:540px) { .grid2 { grid-template-columns: 1fr; } }
 .field { display: flex; flex-direction: column; gap: 6px; }
-.field label {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--muted2);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
+.field label { font-size: 10px; font-family: var(--fm); color: var(--muted2); text-transform: uppercase; letter-spacing: .5px; }
 .field input, .field select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 11px 14px;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  outline: none;
-  transition: border-color .15s;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 13px; color: var(--text); font-family: var(--fm); font-size: 13px;
+  outline: none; transition: border-color .15s;
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
 .field input::placeholder { color: var(--muted); }
-.field select { cursor: pointer; }
 
-/* Toggle */
-.toggle-group {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
+/* Grade toggle */
+.toggle { display: flex; gap: 8px; margin-bottom: 18px; }
+.tbtn {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px; font-family: var(--fh); font-size: 13px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--muted2); cursor: pointer; transition: all .15s;
 }
-.toggle-btn {
-  flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--muted2);
-  cursor: pointer;
-  transition: all .15s;
-}
-.toggle-btn:hover { border-color: var(--accent); color: var(--text); }
-.toggle-btn.active {
-  background: linear-gradient(135deg, var(--accent), #0099cc);
-  border-color: var(--accent);
-  color: #000;
-}
+.tbtn:hover { border-color: var(--accent); color: var(--text); }
+.tbtn.on { background: linear-gradient(135deg, var(--accent), #0099cc); border-color: var(--accent); color: #000; }
 
+/* Button */
 .btn {
-  background: linear-gradient(135deg, var(--accent), #0099cc);
-  border: none;
-  border-radius: 8px;
-  color: #000;
-  font-family: var(--font-head);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 12px 24px;
-  cursor: pointer;
-  transition: transform .15s, box-shadow .15s;
-  width: 100%;
+  background: linear-gradient(135deg, var(--accent), #0099cc); border: none;
+  border-radius: 8px; color: #000; font-family: var(--fh); font-size: 15px;
+  font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  padding: 13px 24px; cursor: pointer; width: 100%; transition: transform .15s, box-shadow .15s;
 }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,212,255,.3); }
-.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 
+/* Status bar */
 .status {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: var(--font-mono);
-  margin-top: 16px;
+  display: none; align-items: center; gap: 8px; padding: 12px 16px;
+  border-radius: 8px; font-size: 12px; font-family: var(--fm); margin-top: 14px;
 }
-.status.show { display: flex; }
-.status.loading { background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); color: var(--accent); }
-.status.error { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2); color: var(--red); }
-
+.status.show  { display: flex; }
+.status.load  { background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); color: var(--accent); }
+.status.ok    { background: rgba(34,197,94,.08);  border: 1px solid rgba(34,197,94,.2);  color: var(--green); }
+.status.err   { background: rgba(239,68,68,.08);  border: 1px solid rgba(239,68,68,.2);  color: var(--red); }
 @keyframes spin { to { transform: rotate(360deg); } }
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .6s linear infinite;
-}
+.spinner { width: 13px; height: 13px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; flex-shrink: 0; }
 
-.results { display: none; margin-top: 32px; }
+/* Results */
+.results { display: none; margin-top: 28px; }
 .results.show { display: block; }
+.result-hd { font-family: var(--fh); font-size: 17px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
 
-.result-header {
-  font-family: var(--font-head);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 16px;
+/* Banner */
+.banner {
+  background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--gold);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;
 }
-
-.target-banner {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--gold);
-  border-radius: 12px;
-  padding: 20px 24px;
-  margin-bottom: 24px;
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-  align-items: center;
+.bstat { display: flex; flex-direction: column; gap: 4px; }
+.blbl  { font-size: 10px; font-family: var(--fm); color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.bval  { font-family: var(--fh); font-size: 30px; font-weight: 900; line-height: 1; color: var(--text); }
+.bval.ac { color: var(--accent); }
+.bval.gd { color: var(--gold); }
+.bdiv   { width: 1px; height: 40px; background: var(--border); align-self: center; }
+.needbox {
+  margin-left: auto; background: rgba(240,180,41,.08); border: 1px solid rgba(240,180,41,.25);
+  border-radius: 10px; padding: 12px 20px; text-align: center; min-width: 130px;
 }
+.needval { font-family: var(--fh); font-size: 38px; font-weight: 900; color: var(--gold); line-height: 1; }
+.needlbl { font-size: 10px; font-family: var(--fm); color: var(--gold); text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
+.plan-tips { width: 100%; margin-top: 6px; font-size: 12px; color: var(--muted2); line-height: 1.7; }
+.plan-tips span { display: block; }
+.plan-tips span::before { content: '›  '; color: var(--accent); }
 
-.banner-stat { display: flex; flex-direction: column; gap: 4px; }
-.banner-label { font-size: 10px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-.banner-val { font-family: var(--font-head); font-size: 32px; font-weight: 900; line-height: 1; color: var(--text); }
-.banner-val.gold { color: var(--gold); }
-.banner-val.accent { color: var(--accent); }
-.banner-divider { width: 1px; height: 40px; background: var(--border); }
-
-.need-box {
-  margin-left: auto;
-  background: rgba(240,180,41,.08);
-  border: 1px solid rgba(240,180,41,.25);
-  border-radius: 10px;
-  padding: 12px 20px;
-  text-align: center;
-  min-width: 140px;
+/* Search bar */
+.search-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.search-row input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 13px; color: var(--text); font-family: var(--fm); font-size: 12px; outline: none;
 }
-.need-val { font-family: var(--font-head); font-size: 40px; font-weight: 900; color: var(--gold); line-height: 1; }
-.need-label { font-size: 10px; font-family: var(--font-mono); color: var(--gold); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+.search-row input:focus { border-color: var(--accent); }
+.count-lbl { font-family: var(--fm); font-size: 11px; color: var(--muted); white-space: nowrap; }
 
-.table-wrap {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-top: 24px;
-}
-.table-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-head);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
+/* Table */
+.table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.table-hd { padding: 14px 18px; border-bottom: 1px solid var(--border); font-family: var(--fh); font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
 table { width: 100%; border-collapse: collapse; }
 thead th {
-  background: var(--surface);
-  padding: 12px 16px;
-  text-align: left;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--muted2);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  font-weight: 500;
-  border-bottom: 1px solid var(--border);
+  background: var(--surface); padding: 10px 14px; text-align: left;
+  font-size: 10px; font-family: var(--fm); color: var(--muted2);
+  text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border);
 }
 thead th.r { text-align: right; }
-
-tbody td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-}
+tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
 tbody td.r { text-align: right; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: rgba(0,212,255,.03); }
-
-.row-you    { background: rgba(0,212,255,.08) !important; }
-.row-target { background: rgba(240,180,41,.06) !important; }
+.row-you    { background: rgba(0,212,255,.09) !important; }
+.row-target { background: rgba(240,180,41,.07) !important; }
 .row-threat { background: rgba(239,68,68,.05) !important; }
-
-.rank-num { font-family: var(--font-head); font-size: 18px; font-weight: 700; color: var(--text); }
-.team-code { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
-.score-total { font-family: var(--font-head); font-size: 18px; font-weight: 700; }
-.score-part { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-
-.tag { 
-  display: inline-block;
-  font-size: 9px;
-  font-family: var(--font-mono);
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-left: 6px;
-  font-weight: 600;
+.rnum  { font-family: var(--fh); font-size: 17px; font-weight: 700; }
+.tcode { font-family: var(--fm); font-size: 12px; font-weight: 600; }
+.stotal { font-family: var(--fh); font-size: 17px; font-weight: 700; }
+.spart  { font-family: var(--fm); font-size: 11px; color: var(--muted); }
+.tag {
+  display: inline-block; font-size: 9px; font-family: var(--fm);
+  padding: 2px 5px; border-radius: 3px; margin-left: 5px; font-weight: 700; vertical-align: middle;
 }
 .tag-you    { background: rgba(0,212,255,.15); color: var(--accent); border: 1px solid rgba(0,212,255,.3); }
-.tag-target { background: rgba(240,180,41,.15); color: var(--gold); border: 1px solid rgba(240,180,41,.3); }
+.tag-target { background: rgba(240,180,41,.15); color: var(--gold);   border: 1px solid rgba(240,180,41,.3); }
+
+/* Pagination */
+.pager { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.pager button {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--muted2); font-family: var(--fm); font-size: 11px; padding: 6px 12px; cursor: pointer;
+}
+.pager button:disabled { opacity: .35; cursor: not-allowed; }
+.pager button:not(:disabled):hover { border-color: var(--accent); color: var(--text); }
+.pager-info { font-family: var(--fm); font-size: 11px; color: var(--muted); flex: 1; text-align: center; }
 </style>
 </head>
 <body>
-
 <div class="wrap">
   <div class="hero">
-    <div class="hero-eyebrow">VEX V5RC SKILLS</div>
-    <h1>
-      <span class="line1">WHAT SCORE DO I</span>
-      <span class="line2">NEED TO RANK UP?</span>
-    </h1>
-    <p>Calculate your target skills score to reach any rank in your state. Real-time data from RobotEvents API.</p>
+    <div class="eyebrow">VEX V5RC SKILLS 2025–2026</div>
+    <h1><span class="l1">WHAT SCORE DO I</span><span class="l2">NEED TO RANK UP?</span></h1>
+    <p>Real-time skills leaderboard data. Enter your state and target rank to see exactly what you need.</p>
   </div>
 
   <div class="card">
     <div class="card-title">Calculator</div>
-    
-    <div class="form-grid">
+
+    <div class="toggle" id="gradeToggle">
+      <button class="tbtn on" onclick="setGrade('High School')">High School</button>
+      <button class="tbtn"    onclick="setGrade('Middle School')">Middle School</button>
+    </div>
+
+    <div class="grid2">
       <div class="field">
-        <label>Team Number or Name (Optional)</label>
-        <input type="text" id="teamQuery" placeholder="1234A or Robo Wolves" maxlength="30">
+        <label>Your Team Number (Optional)</label>
+        <input id="teamQ" type="text" placeholder="1234A" maxlength="12">
       </div>
       <div class="field">
         <label>Target Rank</label>
-        <input type="number" id="targetRank" placeholder="10" min="1" value="10">
+        <input id="rankN" type="number" value="10" min="1" max="9999">
       </div>
     </div>
-
-    <div class="form-grid">
+    <div class="grid2">
       <div class="field">
-        <label>Region / State (Optional)</label>
-        <input type="text" id="region" placeholder="Texas">
+        <label>State / Region (Optional)</label>
+        <input id="regionQ" type="text" placeholder="Oklahoma">
       </div>
       <div class="field">
         <label>Country (Optional)</label>
-        <input type="text" id="country" placeholder="United States">
-      </div>
-    </div>
-
-    <div class="form-grid">
-      <div class="field">
-        <label>API Token (optional if server has ROBOTEVENTS_TOKEN)</label>
-        <input type="password" id="apiToken" placeholder="Your RobotEvents token">
-      </div>
-    </div>
-
-    <div class="field" style="margin-bottom:16px">
-      <label>Grade Level</label>
-      <div class="toggle-group">
-        <button type="button" class="toggle-btn active" onclick="setGrade('High School')">High School</button>
-        <button type="button" class="toggle-btn" onclick="setGrade('Middle School')">Middle School</button>
+        <input id="countryQ" type="text" placeholder="United States">
       </div>
     </div>
 
     <button class="btn" id="calcBtn" onclick="calculate()">Calculate Target Score</button>
-    
+
     <div class="status" id="status">
-      <div class="spinner"></div>
+      <div class="spinner" id="spinner"></div>
       <span id="statusMsg"></span>
     </div>
   </div>
 
   <div class="results" id="results">
-    <div class="result-header" id="resultsTitle"></div>
-
-    <div class="target-banner" id="targetBanner"></div>
-
+    <div class="result-hd" id="resultTitle"></div>
+    <div class="banner" id="banner"></div>
     <div class="table-wrap">
-      <div class="table-header">Full Leaderboard</div>
+      <div class="table-hd">Full Leaderboard</div>
+      <div class="search-row" style="padding:10px 14px 0">
+        <input id="tableSearch" type="text" placeholder="Filter by team number or name…" oninput="renderTable()">
+        <span class="count-lbl" id="countLbl"></span>
+      </div>
       <table>
-        <thead>
-          <tr>
-            <th style="width:60px">Rank</th>
-            <th style="width:100px">Team</th>
-            <th class="r">Total</th>
-            <th class="r">Auton</th>
-            <th class="r">Driver</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
+        <thead><tr>
+          <th style="width:56px">Rank</th>
+          <th>Team</th>
+          <th class="r">Total</th>
+          <th class="r">Auton</th>
+          <th class="r">Driver</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
       </table>
+      <div class="pager">
+        <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
+        <span class="pager-info" id="pagerInfo"></span>
+        <button id="nextBtn" onclick="changePage(1)">Next →</button>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-let selectedGrade = 'High School';
-let serverTokenConfigured = false;
+let grade = 'High School';
+let allTeams = [];
+let youTeam = null;
+let targetRank = 10;
+let filteredTeams = [];
+let page = 0;
+const PAGE_SIZE = 50;
 
-
-(async function initSavedToken() {
-  const saved = localStorage.getItem('re_token');
-  if (saved) {
-    const el = document.getElementById('apiToken');
-    if (el) el.value = saved;
-  }
-
-  try {
-    const statusRes = await fetch('/api/status');
-    if (statusRes.ok) {
-      const statusData = await statusRes.json();
-      serverTokenConfigured = Boolean(statusData.tokenConfigured);
-    }
-  } catch (_) {
-    serverTokenConfigured = false;
-  }
-})();
-
-function setGrade(grade) {
-  selectedGrade = grade;
-  document.querySelectorAll('.toggle-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.textContent === grade);
-  });
+function setGrade(g) {
+  grade = g;
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('on', b.textContent === g));
 }
 
-function setStatus(type, msg) {
+function setStatus(type, msg, showSpinner) {
   const bar = document.getElementById('status');
   bar.className = 'status show ' + type;
+  document.getElementById('spinner').style.display = showSpinner ? 'block' : 'none';
   document.getElementById('statusMsg').textContent = msg;
 }
 
 async function calculate() {
-  const teamQuery = document.getElementById('teamQuery').value.trim();
-  const targetRank = parseInt(document.getElementById('targetRank').value) || 10;
-  const region = document.getElementById('region').value.trim();
-  const country = document.getElementById('country').value.trim();
-  const token = document.getElementById('apiToken').value.trim();
+  const team    = document.getElementById('teamQ').value.trim().toUpperCase() || null;
+  const rank    = parseInt(document.getElementById('rankN').value) || 10;
+  const region  = document.getElementById('regionQ').value.trim() || null;
+  const country = document.getElementById('countryQ').value.trim() || null;
 
-  if (!targetRank || targetRank < 1) { setStatus('error', 'Enter a valid target rank'); return; }
-  if (!token && !serverTokenConfigured) { setStatus('error', 'Add API token or set ROBOTEVENTS_TOKEN on server'); return; }
-  if (token) localStorage.setItem('re_token', token);
+  targetRank = rank;
 
   document.getElementById('calcBtn').disabled = true;
-  setStatus('loading', 'Fetching leaderboard data...');
   document.getElementById('results').className = 'results';
+  setStatus('load', 'Fetching leaderboard…', true);
 
   try {
-    const payload = {
-      team: teamQuery,
-      region,
-      country,
-      rank: targetRank,
-      grade: selectedGrade,
-      token,
-    };
-    const res = await fetch('/api/state', {
+    const payload = { grade, region, country, team, rank };
+    const res  = await fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'API error');
 
-    if (!res.ok) {
-      throw new Error(data.error || 'API Error');
-    }
+    const { you, target, plan, allTeams: teams, totalTeams, cached, filters } = data;
 
-    const { you, target, needed, allTeams, totalTeams, cached, season, plan, filters, cacheInfo } = data;
+    allTeams = teams;
+    youTeam  = you;
 
-    // Build banner
-    let bannerHTML = '';
+    // Banner
+    let html = '';
     if (you) {
-      bannerHTML += `<div class="banner-stat"><div class="banner-label">Your Rank</div><div class="banner-val accent">#${you.rank}</div></div>`;
-      bannerHTML += `<div class="banner-stat"><div class="banner-label">Your Score</div><div class="banner-val">${you.total}</div></div>`;
-      bannerHTML += `<div class="banner-divider"></div>`;
+      html += `<div class="bstat"><div class="blbl">Your Rank</div><div class="bval ac">#${you.rank}</div></div>`;
+      html += `<div class="bstat"><div class="blbl">Your Score</div><div class="bval">${you.total}</div></div>`;
+      html += `<div class="bdiv"></div>`;
     }
-    bannerHTML += `<div class="banner-stat"><div class="banner-label">Target Rank</div><div class="banner-val">#${targetRank}</div></div>`;
-    if (target) {
-      bannerHTML += `<div class="banner-stat"><div class="banner-label">Target Score</div><div class="banner-val">${target.total}</div></div>`;
-    }
-    bannerHTML += `<div class="need-box"><div class="need-val">${needed > 0 ? '+' + needed : '✓'}</div><div class="need-label">${needed > 0 ? 'Points Needed' : 'Already There!'}</div></div>`;
+    html += `<div class="bstat"><div class="blbl">Target Rank</div><div class="bval">#${rank}</div></div>`;
+    if (target) html += `<div class="bstat"><div class="blbl">Target Score</div><div class="bval gd">${target.total}</div></div>`;
 
-    document.getElementById('targetBanner').innerHTML = bannerHTML;
-    const scopeBits = [filters?.country, filters?.region, filters?.grade].filter(Boolean).join(' • ');
-    const scope = scopeBits || 'All Regions';
-    document.getElementById('resultsTitle').textContent = `${scope} • ${season?.name || 'Current Season'}`;
+    const n = plan?.needed ?? 0;
+    html += `<div class="needbox"><div class="needval">${n > 0 ? '+' + n : '✓'}</div><div class="needlbl">${n > 0 ? 'Points Needed' : 'Already There!'}</div></div>`;
 
     if (plan?.recommended?.length) {
-      bannerHTML += `<div style="width:100%;margin-top:8px;font-size:12px;color:var(--muted2);line-height:1.6">${plan.recommended.map(s => `• ${s}`).join('<br>')}</div>`;
-      document.getElementById('targetBanner').innerHTML = bannerHTML;
+      html += `<div class="plan-tips">${plan.recommended.map(s => `<span>${s}</span>`).join('')}</div>`;
     }
+    document.getElementById('banner').innerHTML = html;
 
-    // Build table
-    const tableHTML = allTeams.map(t => {
-      let rowClass = '';
-      let tags = '';
-      if (you && t.team === you.team) {
-        rowClass = 'row-you';
-        tags = '<span class="tag tag-you">YOU</span>';
-      } else if (t.rank === targetRank) {
-        rowClass = 'row-target';
-        tags = '<span class="tag tag-target">TARGET</span>';
-      } else if (you && you.rank > targetRank && t.rank > targetRank && t.rank < you.rank) {
-        // Teams between target and you — the ones blocking your path up
-        rowClass = 'row-threat';
-      }
+    const scopeParts = [filters?.grade, filters?.country, filters?.region].filter(Boolean);
+    document.getElementById('resultTitle').textContent = scopeParts.join(' • ') || 'All Regions';
 
-      return `
-        <tr class="${rowClass}">
-          <td><span class="rank-num">${t.rank}</span></td>
-          <td><span class="team-code">${t.team}</span>${tags}</td>
-          <td class="r"><span class="score-total">${t.total}</span></td>
-          <td class="r"><span class="score-part">${t.auton}</span></td>
-          <td class="r"><span class="score-part">${t.driver}</span></td>
-        </tr>
-      `;
-    }).join('');
+    page = 0;
+    document.getElementById('tableSearch').value = '';
+    renderTable();
 
-    document.getElementById('tableBody').innerHTML = tableHTML;
-
-    const cacheMsg = cacheInfo ? ` • source teams: ${cacheInfo.sourceTeamCount}, API calls: ${cacheInfo.apiSkillCallsThisRequest}, cache hits: ${cacheInfo.skillCacheHitsThisRequest}` : '';
-    const bar = document.getElementById('status');
-    bar.className = 'status show';
-    bar.style.background = 'rgba(34,197,94,.08)';
-    bar.style.border = '1px solid rgba(34,197,94,.2)';
-    bar.style.color = 'var(--green)';
-    document.getElementById('statusMsg').textContent = `✓ Loaded ${totalTeams} teams${cached ? ' (cached)' : ''}${cacheMsg}`;
-    setTimeout(() => {
-      bar.className = 'status';
-      bar.style = '';
-    }, 4000);
+    setStatus('ok', `✓ ${totalTeams} teams loaded${cached ? ' (cached)' : ''}`, false);
+    setTimeout(() => { document.getElementById('status').className = 'status'; }, 4000);
 
     document.getElementById('results').className = 'results show';
     document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (err) {
-    setStatus('error', err.message);
+    setStatus('err', err.message, false);
   }
-
   document.getElementById('calcBtn').disabled = false;
 }
-</script>
 
+function renderTable() {
+  const q = document.getElementById('tableSearch').value.trim().toUpperCase();
+  filteredTeams = q
+    ? allTeams.filter(t => t.team.includes(q) || t.teamName.toUpperCase().includes(q))
+    : allTeams;
+
+  const total = filteredTeams.length;
+  const start = page * PAGE_SIZE;
+  const slice = filteredTeams.slice(start, start + PAGE_SIZE);
+
+  document.getElementById('countLbl').textContent = total !== allTeams.length
+    ? `${total} of ${allTeams.length} teams` : `${allTeams.length} teams`;
+
+  const rows = slice.map(t => {
+    let cls = '', tags = '';
+    if (youTeam && t.team === youTeam.team) {
+      cls = 'row-you'; tags = '<span class="tag tag-you">YOU</span>';
+    } else if (t.rank === targetRank) {
+      cls = 'row-target'; tags = '<span class="tag tag-target">TARGET</span>';
+    } else if (youTeam && youTeam.rank > targetRank && t.rank > targetRank && t.rank < youTeam.rank) {
+      cls = 'row-threat';
+    }
+    return `<tr class="${cls}">
+      <td><span class="rnum">${t.rank}</span></td>
+      <td><span class="tcode">${t.team}</span>${tags}<br><span style="font-size:11px;color:var(--muted)">${t.teamName || ''}</span></td>
+      <td class="r"><span class="stotal">${t.total}</span></td>
+      <td class="r"><span class="spart">${t.auton}</span></td>
+      <td class="r"><span class="spart">${t.driver}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tbody').innerHTML = rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">No teams found</td></tr>';
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  document.getElementById('pagerInfo').textContent = total > 0
+    ? `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, total)} of ${total}` : '';
+  document.getElementById('prevBtn').disabled = page === 0;
+  document.getElementById('nextBtn').disabled = page >= totalPages - 1;
+}
+
+function changePage(dir) {
+  const totalPages = Math.ceil(filteredTeams.length / PAGE_SIZE);
+  page = Math.max(0, Math.min(page + dir, totalPages - 1));
+  renderTable();
+  document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
 </body>
 </html>
